@@ -1,0 +1,90 @@
+# Integração Contínua do Clarifica.ai
+#
+# Dois portões independentes:
+#   1. testes-unitarios — suíte completa em Node (incluindo inferência de IA
+#      REAL com os modelos quantizados oficiais, cacheados entre execuções);
+#   2. testes-e2e — a extensão é carregada de verdade no Chromium (canal
+#      chromium, headless moderno) pelo Playwright e seus fluxos são
+#      exercitados em páginas HTTP reais: service worker, popup, injeção
+#      via chrome.scripting, ARIA, filtros de daltonismo e restauração.
+#
+# Requisito de estrutura: o repositório mantém a pasta `clarifica-ai/` na
+# raiz (a mesma pasta carregada via "Carregar sem compactação" no Chrome).
+
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  testes-unitarios:
+    name: Suíte unitária + inferência de IA real
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: clarifica-ai/tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # Os pesos (~580 MB) são baixados uma única vez pelo job; a chave
+      # embute os SHAs fixados em VERSOES_MODELOS.md — mudou o modelo,
+      # invalida o cache automaticamente.
+      - name: Cache dos modelos de IA (Hugging Face)
+        uses: actions/cache@v4
+        with:
+          path: clarifica-ai/tests/.cache
+          key: hf-modelos-distilbart-a6c58857--vitgpt2-215b4edc
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Executar suíte completa (Node --test)
+        run: npm test
+
+  testes-e2e:
+    name: E2E da extensão no Chromium real
+    runs-on: ubuntu-latest
+    needs: testes-unitarios
+    defaults:
+      run:
+        working-directory: clarifica-ai/tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Cache dos navegadores do Playwright
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ hashFiles('clarifica-ai/tests/package-lock.json') }}
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Instalar Chromium (com dependências do sistema)
+        run: npx playwright install --with-deps chromium
+
+      - name: Executar E2E da extensão
+        run: npm run test:e2e
+
+      - name: Publicar relatório E2E em caso de falha
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relatorio-e2e
+          path: clarifica-ai/tests/e2e/playwright-report/
+          retention-days: 14

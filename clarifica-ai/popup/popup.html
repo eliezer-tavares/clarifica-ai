@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Clarifica.ai</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <h1>🧠 Clarifica.ai</h1>
+    <p>IA Local • Privacidade Total</p>
+  </header>
+  <main>
+    <div id="status" class="status-bar" role="status" aria-live="polite">Pronto. Use atalhos ou clique abaixo.</div>
+
+    <h2 style="font-size: 0.9rem; margin-top: 16px; color: #64748b;">Acessibilidade Cognitiva e Visual</h2>
+    <div class="grid-buttons">
+      <button class="mode-btn" data-mode="leitura">📖 Modo Leitura Essencial</button>
+      <button class="mode-btn primary" data-mode="resumo">✨ Resumir Texto com IA</button>
+      <button class="mode-btn" data-mode="imagens">🖼️ Descrever Imagens</button>
+    </div>
+
+    <h2 style="font-size: 0.9rem; margin-top: 16px; color: #64748b;">Filtros para Daltonismo</h2>
+    <div class="grid-buttons">
+      <button class="mode-btn dalton" data-mode="protanopia">🔴 Protanopia (Vermelho)</button>
+      <button class="mode-btn dalton" data-mode="deuteranopia">🟢 Deuteranopia (Verde)</button>
+      <button class="mode-btn dalton" data-mode="tritanopia">🔵 Tritanopia (Azul)</button>
+    </div>
+
+    <div id="result-area" class="hidden">
+      <h3>Resultado:</h3>
+      <div id="ai-output" class="output-box" role="region" aria-label="Resultado da IA"></div>
+      <button id="close-result" class="text-btn">Fechar</button>
+    </div>
+  </main>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

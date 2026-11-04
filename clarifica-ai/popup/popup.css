@@ -1,0 +1,17 @@
+:root { --primary: #2563eb; --bg: #ffffff; --text: #0f172a; --border: #e2e8f0; }
+body { width: 320px; margin: 0; font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 16px; }
+h1 { font-size: 1.2rem; margin: 0 0 4px 0; color: var(--primary); }
+h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 8px 0; }
+p { font-size: 0.8rem; color: #64748b; margin: 0 0 16px 0; }
+.status-bar { background: #f1f5f9; padding: 8px; border-radius: 6px; font-size: 0.85rem; text-align: center; margin-bottom: 16px; border: 1px solid var(--border); }
+.mode-btn { width: 100%; padding: 10px; margin-bottom: 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); cursor: pointer; text-align: left; font-size: 0.9rem; font-weight: 600; }
+.mode-btn:hover { background: #f8fafc; border-color: var(--primary); }
+.mode-btn.primary { background: var(--primary); color: white; border-color: var(--primary); }
+.mode-btn.primary:hover { background: #1d4ed8; }
+.mode-btn.dalton { border-left: 4px solid #94a3b8; }
+.mode-btn.dalton[data-mode="protanopia"] { border-left-color: #ef4444; }
+.mode-btn.dalton[data-mode="deuteranopia"] { border-left-color: #22c55e; }
+.mode-btn.dalton[data-mode="tritanopia"] { border-left-color: #3b82f6; }
+.hidden { display: none; }
+.output-box { background: #f8fafc; padding: 12px; border-radius: 6px; font-size: 0.9rem; line-height: 1.5; max-height: 200px; overflow-y: auto; border: 1px solid var(--border); }
+.text-btn { background: none; border: none; color: var(--primary); cursor: pointer; text-decoration: underline; margin-top: 8px; font-size: 0.85rem; }

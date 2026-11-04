@@ -1,0 +1,11 @@
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Empacotamento local — chaves privadas (.pem) NUNCA vão para o git
+*.pem
+*.crx
+*.zip
+
+# Dependências instaladas na raiz (a suíte usa clarifica-ai/tests/)
+node_modules/

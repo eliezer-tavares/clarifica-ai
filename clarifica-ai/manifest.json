@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Clarifica.ai",
+  "version": "1.0.0",
+  "description": "Acessibilidade universal com Edge AI: Resumos, descrição de imagens e filtros de daltonismo, 100% offline.",
+  "author": { "email": "contact@eliezertavaresdeoliveira.com" },
+  "homepage_url": "https://github.com/eliezer-tavares/clarifica-ai",
+  "minimum_chrome_version": "102",
+  "icons": { "128": "assets/icon.png" },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": { "128": "assets/icon.png" }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "commands": {
+    "toggle-resumo": { "suggested_key": { "default": "Ctrl+Shift+R" }, "description": "Resumir página com IA" },
+    "toggle-leitura": { "suggested_key": { "default": "Ctrl+Shift+L" }, "description": "Modo Leitura Essencial (NVDA/JAWS)" },
+    "toggle-imagens": { "suggested_key": { "default": "Ctrl+Shift+A" }, "description": "Descrever imagens da página" },
+    "toggle-reset": { "suggested_key": { "default": "Ctrl+Shift+X" }, "description": "Restaurar página original" }
+  },
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["<all_urls>"],
+  "web_accessible_resources": [
+    {
+      "resources": ["scripts/ai-worker.js"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
+  }
+}

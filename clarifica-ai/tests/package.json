@@ -1,0 +1,17 @@
+{
+  "name": "clarifica-ai-tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Suíte de testes automatizados do Clarifica.ai",
+  "scripts": {
+    "test": "node --test ./*.test.js",
+    "test:e2e": "playwright test --config e2e/playwright.config.js",
+    "preparar:modelos": "node setup/preparar_modelos_ia.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.57.0",
+    "@xenova/transformers": "2.14.0",
+    "axe-core": "^4.9.0",
+    "jsdom": "^24.1.0"
+  }
+}

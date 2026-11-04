@@ -1,0 +1,5 @@
+node_modules/
+tests/node_modules/
+tests/.cache/
+tests/e2e/playwright-report/
+tests/e2e/resultados-teste/
