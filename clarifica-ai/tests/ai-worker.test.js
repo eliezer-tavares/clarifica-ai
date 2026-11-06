@@ -38,13 +38,16 @@ async function workerReal() {
   if (!estado) {
     const tf = await import('@xenova/transformers');
 
-    // O código do worker é real; apenas o import do CDN aponta para o mesmo
-    // pacote na mesma versão, já instalado localmente pelo npm.
+    // O código do worker é real; o placeholder da biblioteca é substituído
+    // pelo pacote npm na MESMA versão fixada, já instalado localmente pelo
+    // npm (a extensão real injeta a URL do vendor — ver versoes-modelos).
     const codigo = CODIGO_WORKER.replace(
-      /import\s*\{[^}]+\}\s*from\s*'https:\/\/cdn\.jsdelivr\.net\/npm\/@xenova\/transformers@[^']+';/,
+      /import\s*\{[^}]+\}\s*from\s*'__CLARIFICA_BIBLIOTECA__';/,
       `import { pipeline, env } from '@xenova/transformers';`
     );
-    assert.notEqual(codigo, CODIGO_WORKER, 'import do CDN localizado no ai-worker.js');
+    assert.notEqual(codigo, CODIGO_WORKER, 'placeholder da biblioteca localizado no ai-worker.js');
+    assert.doesNotMatch(CODIGO_WORKER, /https:\/\/cdn\.jsdelivr\.net/,
+      'v1.1.0: o worker não pode referenciar CDN (biblioteca vendada)');
     assert.match(codigo, /Xenova\/distilbart-cnn-12-6/, 'worker real: modelo de sumarização do projeto');
     assert.match(codigo, /Xenova\/vit-gpt2-image-captioning/, 'worker real: modelo de visão do projeto');
 
@@ -101,7 +104,7 @@ test.after(() => {
 
 // --- Testes (inferência 100% real) ---
 
-test('Transformers.js REAL na versão exata carregada pela extensão via CDN', async () => {
+test('Transformers.js REAL na versão exata vendada pela extensão (vendor/)', async () => {
   const { version } = await workerReal();
   assert.equal(version, VERSAO_TRANSFORMERS);
 });

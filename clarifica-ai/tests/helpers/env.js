@@ -1,6 +1,7 @@
 // Helpers compartilhados da suíte de testes do Clarifica.ai.
-// Fornece DOM simulado (jsdom), stub da API chrome://, Web Worker falso,
-// cálculo de contraste WCAG e utilidades de tempo.
+// Fornece DOM simulado (jsdom), stub da API chrome:// (incluindo i18n
+// com as mensagens REAIS de _locales/pt_BR e storage.local com estado),
+// Web Worker falso, cálculo de contraste WCAG e utilidades de tempo.
 
 const path = require('node:path');
 const fs = require('node:fs');
@@ -10,6 +11,33 @@ const { JSDOM } = require('jsdom');
 const ROOT = path.resolve(__dirname, '..', '..');
 const ext = (...p) => path.join(ROOT, ...p);
 const readExt = (...p) => fs.readFileSync(ext(...p), 'utf8');
+
+// Mensagens reais de pt_BR — os testes usam o MESMO conteúdo que o
+// Chrome entrega ao usuário com o navegador em português do Brasil.
+const MENSAGENS_PT = JSON.parse(readExt('_locales', 'pt_BR', 'messages.json'));
+
+/** Resolve placeholders do chrome.i18n: "$nome$" → args[N-1] do content "$N". */
+function resolverMensagem(definicao, args = []) {
+  let texto = definicao.message;
+  for (const [nome, ph] of Object.entries(definicao.placeholders || {})) {
+    const indice = Number(String(ph.content).replace('$', '')) - 1;
+    texto = texto.split(`$${nome}$`).join(args[indice] ?? '');
+  }
+  return texto;
+}
+
+const mensagemPT = (chave, args) => {
+  const definicao = MENSAGENS_PT[chave];
+  return definicao ? resolverMensagem(definicao, args) : '';
+};
+
+/** Replica a substituição de __MSG_chave__ que o Chrome faz na carga do HTML da extensão. */
+function substituirI18n(html) {
+  return html.replace(/__MSG_(\w+)__/g, (original, chave) => {
+    const definicao = MENSAGENS_PT[chave];
+    return definicao ? definicao.message : original;
+  });
+}
 
 /** Cria um JSDOM com temporizadores acelerados e polyfill de innerText. */
 function makeDom(html = '<!DOCTYPE html><html lang="pt-BR"><body></body></html>', url = 'https://pagina-de-teste.exemplo/') {
@@ -31,10 +59,33 @@ function makeDom(html = '<!DOCTYPE html><html lang="pt-BR"><body></body></html>'
   return dom;
 }
 
-/** Stub da API chrome.* com registro de chamadas; executeScript roda a função injetada de verdade no jsdom. */
+/** Stub da API chrome.* com registro de chamadas; executeScript roda a função injetada de verdade no jsdom.
+ * opts.storageInicial pré-popula o chrome.storage.local (testes de persistência). */
 function makeChromeStub(window, opts = {}) {
-  const calls = { executeScript: [], commands: [], getURL: [] };
+  const calls = { executeScript: [], commands: [], getURL: [], onChanged: [] };
   const fakeTab = { id: opts.tabId ?? 7, active: true, currentWindow: true };
+  const storageStore = { ...(opts.storageInicial || {}) };
+
+  // fetch padrão do stub: entrega as mensagens REAIS de _locales (o motor
+  // de mensagens v1.1 carrega os JSON via fetch + getURL) e um corpo neutro
+  // para o resto (ex.: código do worker de IA).
+  const fetchPadrao = async (url) => {
+    if (String(url).includes('_locales/')) {
+      return { ok: true, status: 200, json: async () => MENSAGENS_PT, text: async () => JSON.stringify(MENSAGENS_PT) };
+    }
+    return { ok: true, status: 200, json: async () => ({}), text: async () => '' };
+  };
+  window.fetch = window.fetch || fetchPadrao;
+
+  // navigator.languages: fonte primária do idioma no motor de mensagens
+  // (em produção reflete a configuração do navegador do usuário).
+  try {
+    Object.defineProperty(window.navigator, 'languages', {
+      get: () => opts.idiomasAceitos || ['pt-BR', 'pt'],
+      configurable: true
+    });
+  } catch (e) { /* ambiente sem navigator configurável */ }
+
   const chrome = {
     runtime: {
       getURL: (p) => { calls.getURL.push(p); return `chrome-extension://clarifica-ai/${p}`; }
@@ -50,10 +101,32 @@ function makeChromeStub(window, opts = {}) {
     commands: {
       onCommand: { addListener: (cb) => { calls.commands.push(cb); } }
     },
-    storage: { local: { get: async () => ({}), set: async () => {} } }
+    // chrome.i18n: getAcceptLanguages segue o cenário do teste (padrão pt-BR,
+    // como o Playwright fixa nos E2E); getMessage mantém o comportamento nativo.
+    i18n: {
+      getAcceptLanguages: async () => opts.idiomasAceitos || ['pt-BR', 'pt'],
+      getMessage: (chave, args) => mensagemPT(chave, args)
+    },
+    storage: {
+      onChanged: { addListener: (cb) => { calls.onChanged.push(cb); } },
+      local: {
+        async get(chaves) {
+          if (chaves === null || chaves === undefined) return { ...storageStore };
+          const padrao = Array.isArray(chaves)
+            ? Object.fromEntries(chaves.map((k) => [k, undefined]))
+            : chaves;
+          const saida = {};
+          for (const [k, padraoValor] of Object.entries(padrao)) {
+            saida[k] = storageStore[k] !== undefined ? storageStore[k] : padraoValor;
+          }
+          return saida;
+        },
+        async set(obj) { Object.assign(storageStore, obj); }
+      }
+    }
   };
   window.chrome = chrome;
-  return { chrome, calls, fakeTab };
+  return { chrome, calls, fakeTab, storageStore };
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -99,7 +172,12 @@ class FakeWorker {
       return;
     }
     if (FakeWorker.mode === 'worker-status-error') {
-      setTimeout(() => this.onmessage && this.onmessage({ data: { status: 'error', error: 'Erro ao processar texto.' } }), 5);
+      // O worker real emite CÓDIGO de erro; o popup traduz via i18n.
+      setTimeout(() => this.onmessage && this.onmessage({ data: { status: 'error', error: 'erro-resumo' } }), 5);
+      return;
+    }
+    if (FakeWorker.mode === 'worker-imagem-erro') {
+      setTimeout(() => this.onmessage && this.onmessage({ data: { type: 'error', error: 'erro-imagem' } }), 5);
       return;
     }
     if (msg.type === 'summarize') {
@@ -116,4 +194,4 @@ class FakeWorker {
 FakeWorker.instances = [];
 FakeWorker.mode = 'ok';
 
-module.exports = { makeDom, makeChromeStub, sleep, contrast, luminance, FakeWorker, readExt, ext, ROOT };
+module.exports = { makeDom, makeChromeStub, sleep, contrast, luminance, FakeWorker, readExt, ext, ROOT, mensagemPT, substituirI18n, MENSAGENS_PT };

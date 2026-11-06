@@ -1,17 +1,75 @@
-:root { --primary: #2563eb; --bg: #ffffff; --text: #0f172a; --border: #e2e8f0; }
+/* Tokens de cor — tema claro é o padrão; o tema escuro aplica-se quando o
+   usuário fixa data-tema="escuro" ou, no modo automático (sem atributo),
+   quando o sistema operacional declara prefers-color-scheme: dark. */
+:root {
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --texto-primario: #ffffff;
+  --bg: #ffffff;
+  --text: #0f172a;
+  --secundario: #64748b;
+  --border: #e2e8f0;
+  --status-bg: #f1f5f9;
+  --saida-bg: #f8fafc;
+  --hover-bg: #f8fafc;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="claro"]):not([data-tema="escuro"]) {
+    --primary: #60a5fa;
+    --primary-hover: #3b82f6;
+    --texto-primario: #0f172a;
+    --bg: #0f172a;
+    --text: #e2e8f0;
+    --secundario: #94a3b8;
+    --border: #334155;
+    --status-bg: #1e293b;
+    --saida-bg: #1e293b;
+    --hover-bg: #1e293b;
+  }
+}
+
+:root[data-tema="escuro"] {
+  --primary: #60a5fa;
+  --primary-hover: #3b82f6;
+  --texto-primario: #0f172a;
+  --bg: #0f172a;
+  --text: #e2e8f0;
+  --secundario: #94a3b8;
+  --border: #334155;
+  --status-bg: #1e293b;
+  --saida-bg: #1e293b;
+  --hover-bg: #1e293b;
+}
+
 body { width: 320px; margin: 0; font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 16px; }
+
+header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 h1 { font-size: 1.2rem; margin: 0 0 4px 0; color: var(--primary); }
 h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 8px 0; }
-p { font-size: 0.8rem; color: #64748b; margin: 0 0 16px 0; }
-.status-bar { background: #f1f5f9; padding: 8px; border-radius: 6px; font-size: 0.85rem; text-align: center; margin-bottom: 16px; border: 1px solid var(--border); }
-.mode-btn { width: 100%; padding: 10px; margin-bottom: 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); cursor: pointer; text-align: left; font-size: 0.9rem; font-weight: 600; }
-.mode-btn:hover { background: #f8fafc; border-color: var(--primary); }
-.mode-btn.primary { background: var(--primary); color: white; border-color: var(--primary); }
-.mode-btn.primary:hover { background: #1d4ed8; }
+p { font-size: 0.8rem; color: var(--secundario); margin: 0 0 16px 0; }
+
+.secao-titulo { font-size: 0.9rem; margin-top: 16px; color: var(--secundario); }
+
+.tema-btn { background: none; border: 1px solid var(--border); color: var(--secundario); border-radius: 6px; cursor: pointer; padding: 4px 8px; font-size: 0.75rem; white-space: nowrap; }
+.tema-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+.status-bar { background: var(--status-bg); padding: 8px; border-radius: 6px; font-size: 0.85rem; text-align: center; margin-bottom: 16px; border: 1px solid var(--border); }
+.mode-btn { width: 100%; padding: 10px; margin-bottom: 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); cursor: pointer; text-align: left; font-size: 0.9rem; font-weight: 600; }
+.mode-btn:hover { background: var(--hover-bg); border-color: var(--primary); }
+.mode-btn.primary { background: var(--primary); color: var(--texto-primario); border-color: var(--primary); }
+.mode-btn.primary:hover { background: var(--primary-hover); }
 .mode-btn.dalton { border-left: 4px solid #94a3b8; }
 .mode-btn.dalton[data-mode="protanopia"] { border-left-color: #ef4444; }
 .mode-btn.dalton[data-mode="deuteranopia"] { border-left-color: #22c55e; }
 .mode-btn.dalton[data-mode="tritanopia"] { border-left-color: #3b82f6; }
+.mode-btn.dalton.ativo { outline: 2px solid var(--primary); outline-offset: 1px; }
+
+.slider-row { display: flex; align-items: center; gap: 8px; margin: 8px 0 14px; }
+.slider-row label { font-size: 0.8rem; color: var(--secundario); flex: 1; }
+.slider-row input[type="range"] { flex: 1; accent-color: var(--primary); }
+.slider-valor { font-size: 0.8rem; color: var(--secundario); min-width: 38px; text-align: right; }
+
 .hidden { display: none; }
-.output-box { background: #f8fafc; padding: 12px; border-radius: 6px; font-size: 0.9rem; line-height: 1.5; max-height: 200px; overflow-y: auto; border: 1px solid var(--border); }
-.text-btn { background: none; border: none; color: var(--primary); cursor: pointer; text-decoration: underline; margin-top: 8px; font-size: 0.85rem; }
+.output-box { background: var(--saida-bg); padding: 12px; border-radius: 6px; font-size: 0.9rem; line-height: 1.5; max-height: 200px; overflow-y: auto; border: 1px solid var(--border); }
+.text-btn { background: none; border: none; color: var(--primary); cursor: pointer; text-decoration: underline; margin-top: 8px; font-size: 0.85rem; padding: 0; }

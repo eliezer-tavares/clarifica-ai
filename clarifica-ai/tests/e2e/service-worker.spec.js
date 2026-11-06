@@ -31,14 +31,17 @@ test.afterAll(async () => {
   await servidor?.fechar();
 });
 
-// Espelho fiel do listener de chrome.commands.onCommand (background.js).
+// Espelho fiel do listener de chrome.commands.onCommand (background.js):
+// o par de injeções recebe o CÓDIGO da ação e a MENSAGEM já resolvida pelo
+// motor de mensagens do service worker (dicionário de _locales), exatamente
+// como o listener real repassa para anunciarAcao.
 async function acionarAtalhoNoServiceWorker(acao) {
   await navegador.serviceWorker.evaluate(async (nomeAcao) => {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: anunciarAcao,
-      args: [nomeAcao]
+      args: [nomeAcao, mensagemParaLeitor(nomeAcao)]
     });
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },

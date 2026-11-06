@@ -2,7 +2,7 @@
 
 > Acessibilidade universal com Inteligência Artificial local: resumos automáticos, descrição de imagens, Modo Leitura Essencial e filtros para daltonismo — direto no navegador, 100% offline.
 
-**Licença:** Apache-2.0 · **Manifest:** V3 · **Navegadores:** Chrome, Edge, Brave e outros Chromium · **IA:** Edge AI (local), sem envio de dados · **CI:** testes unitários + E2E no Chromium real
+**Licença:** Apache-2.0 · **Versão:** 1.1.0 · **Manifest:** V3 · **Navegadores:** Chrome, Edge, Brave e outros Chromium · **IA:** Edge AI (local), sem envio de dados · **CI:** testes unitários + E2E no Chromium real
 
 **Repositório:** <https://github.com/eliezer-tavares/clarifica-ai>
 
@@ -21,10 +21,12 @@ O Clarifica.ai é uma extensão de navegador que transforma qualquer página web
 | 1 | 📖 **Modo Leitura Essencial** | Silencia navegação, rodapés, barras laterais (`aside`), propagandas (`.ads`) e cabeçalhos por meio de `aria-hidden` + `inert`; move o foco para o conteúdo principal (`main`/`article`). Ideal para NVDA e JAWS. | `Ctrl+Shift+L` ou botão no popup |
 | 2 | ✨ **Resumir texto com IA** | Extrai o texto principal da página e gera um resumo com o modelo DistilBART quantizado (int8), executado em Web Worker dedicado — a página nunca trava. O resultado aparece no popup em uma região ARIA rolável. | `Ctrl+Shift+R` ou botão no popup |
 | 3 | 🖼️ **Descrever imagens** | Localiza todas as imagens sem `alt` (ou com `alt` vazio/genérico como `"image"`) e gera descrições com o modelo ViT-GPT2; aplica `alt`, `aria-label` ("Descrição por IA: …") e um contorno verde de confirmação em cada imagem processada. | `Ctrl+Shift+A` ou botão no popup |
-| 4 | 🔴🟢🔵 **Filtros para daltonismo** | Aplica matrizes de correção cromática (`feColorMatrix` SVG) sobre a página inteira, com um clique, para **protanopia**, **deuteranopia** e **tritanopia** (atende WCAG 1.4.1 — Uso de Cor). | Botões no popup |
+| 4 | 🔴🟢🔵 **Filtros para daltonismo** | Aplica matrizes de correção cromática (`feColorMatrix` SVG) sobre a página inteira, com um clique e **intensidade ajustável (0–100%, interpolada matematicamente)**, para **protanopia**, **deuteranopia** e **tritanopia** (atende WCAG 1.4.1 — Uso de Cor). | Botões + controle no popup |
 | 5 | ♻️ **Restaurar página** | Remove todos os efeitos aplicados: filtros de cor, silenciamento de regiões e elementos criados pela extensão. A página volta exatamente ao estado original. | `Ctrl+Shift+X` |
 | 6 | 🔊 **Feedback para leitores de tela** | Cada ação injeta um anúncio `role="status"` com `aria-live="assertive"` e `aria-atomic="true"`, lido imediatamente pelo leitor de tela (WCAG 4.1.3 — Mensagens de Status). | Automático |
-| 7 | 🖥️ **Popup acessível** | Barra de status ao vivo (`aria-live="polite"`), sete botões nativos navegáveis por `TAB`, área de resultado com `role="region"` e botão "Fechar". | Clique no ícone da extensão |
+| 7 | 🖥️ **Popup acessível** | Barra de status ao vivo (`aria-live="polite"`), oito botões nativos navegáveis por `TAB`, controle de intensidade rotulado, área de resultado com `role="region"` e botão "Fechar". | Clique no ícone da extensão |
+| 8 | 🌗 **Tema claro/escuro + configurações persistidas** | O popup acompanha o sistema (modo automático) ou fixa claro/escuro; tema, último filtro e intensidade ficam persistidos via `chrome.storage` e restaurados ao reabrir (todos os pares de cor dos dois temas validados em AA). | Botão "Tema" no popup |
+| 9 | 🌐 **Interface pt-BR/en** | Interface e anúncios do leitor de tela seguem o idioma do navegador (português ou inglês), com mensagens versionadas em `_locales` e auditadas por teste de paridade. | Automático |
 
 ### O que você ganha na prática
 
@@ -80,21 +82,25 @@ O Clarifica.ai é uma extensão de navegador que transforma qualquer página web
 ├── README.md              # Documentação completa (pt-BR) — este arquivo
 ├── LICENSE                # Licença Apache-2.0
 └── clarifica-ai/          # Pasta carregada no Chrome ("Carregar sem compactação")
-    ├── manifest.json      # Manifest V3: atalhos, permissões mínimas, CSP, ícone
-    ├── background.js      # Service Worker: comandos de teclado + anúncios ARIA
+    ├── manifest.json      # Manifest V3: atalhos, permissões mínimas, CSP, ícone, default_locale
+    ├── background.js      # Service Worker: comandos de teclado + anúncios ARIA (mensagens de _locales)
+    ├── _locales/          # Mensagens pt-BR/en da interface (pt_BR é o default)
+    │   ├── pt_BR/messages.json
+    │   └── en/messages.json
     ├── popup/
-    │   ├── popup.html     # UI semântica e acessível
-    │   ├── popup.css      # Alto contraste (pares AA verificados por testes)
-    │   └── popup.js       # Orquestra injeção de scripts, filtros e resultados
+    │   ├── popup.html     # UI semântica e acessível (placeholders __MSG__ do i18n)
+    │   ├── popup.css      # Temas claro/escuro (AA nos dois) + slider de intensidade
+    │   └── popup.js       # Orquestra injeção, filtros com intensidade, tema, storage, i18n
     ├── scripts/
-    │   └── ai-worker.js   # Web Worker: Transformers.js (resumo + visão), versões fixadas
+    │   └── ai-worker.js   # Web Worker: Transformers.js vendada (sem CDN), versões fixadas
+    ├── vendor/            # Biblioteca vendada: transformers.min.js + 4 binários WASM do onnxruntime
     ├── assets/
     │   └── icon.png       # Ícone 128×128
     ├── VERSOES_MODELOS.md # Registry de versões fixadas da biblioteca e dos modelos
     └── tests/             # Suíte completa: Node (unitária + IA real) e Playwright (E2E)
 ```
 
-**Fluxo técnico:** atalho de teclado → Service Worker (`chrome.commands`) → `chrome.scripting.executeScript` injeta funções na página → manipulação do DOM (ARIA, filtros) ou postMessage para o popup. A inferência de IA roda em Web Worker isolado com modelos quantizados da biblioteca Transformers.js (`distilbart-cnn-12-6` para sumarização, `vit-gpt2-image-captioning` para visão), reduzindo os pesos de float32 para int8 e viabilizando execução em hardware modesto.
+**Fluxo técnico:** atalho de teclado → Service Worker (`chrome.commands`) → `chrome.scripting.executeScript` injeta funções na página → manipulação do DOM (ARIA, filtros) ou postMessage para o popup. A inferência de IA roda em Web Worker isolado com a biblioteca Transformers.js **vendada no próprio pacote** (`vendor/transformers.min.js` + binários WASM locais — zero CDN desde a v1.1.0) e modelos quantizados fixados por revisão (`distilbart-cnn-12-6` para sumarização, `vit-gpt2-image-captioning` para visão), reduzindo os pesos de float32 para int8 e viabilizando execução em hardware modesto.
 
 ## 🔧 Notas de engenharia
 
@@ -107,7 +113,10 @@ Ajustes aplicados sobre a especificação original, identificados durante as bat
 - **Encontrado pelos testes E2E em navegador real:** quando a função injetada rejeita, `chrome.scripting.executeScript` devolve `result: null` (não propaga o erro) — o popup chegava a exibir "Concluído!" com saída vazia. Todos os resultados agora são validados antes de exibir sucesso, e o resumo só resolve na mensagem final do worker (`success`/`error`), nunca no primeiro sinal de progresso.
 - Adicionados `author` (e-mail de contato) e `minimum_chrome_version: 102` ao manifesto.
 - Versões da biblioteca de IA e dos modelos são **fixadas por commit (SHA)** no Hugging Face — sem branch flutuante —, com procedimento formal de upgrade e rollback descrito em [`clarifica-ai/VERSOES_MODELOS.md`](clarifica-ai/VERSOES_MODELOS.md) e auditado por teste automatizado.
-- Empacotamento local do Transformers.js está previsto no roadmap: a carga via CDN pode ser bloqueada pela política de código remoto do Manifest V3 em algumas configurações.
+- **v1.1.0 — Empacotamento local da Transformers.js:** o bundle oficial 2.14.0 e os 4 binários WASM do onnxruntime passam a viver em `vendor/` (publicados em `web_accessible_resources`); o `ai-worker.js` recebe as URLs locais via placeholders injetados pelo popup e o import de CDN foi eliminado — o pacote cumpre o Manifest V3 sem código remoto e a inferência não depende de terceiros em runtime.
+- **v1.1.0 — Intensidade dos filtros de daltonismo:** interpolação linear entre a matriz identidade e a matriz do filtro (`M' = t·M + (1−t)·I`), que preserva a soma das linhas RGB e o canal alfa para qualquer intensidade; slider 0–100% no popup, com reaplicação ao soltar e persistência por configuração.
+- **v1.1.0 — Motor de mensagens pt-BR/en:** o `chrome.i18n.getMessage` nativo depende do app-locale do processo do navegador, que não é confiável em builds headless (E2E) e instalações multilíngues; o popup resolve o idioma por `navigator.languages` → `getAcceptLanguages` → fallback pt_BR, carrega os JSON de `_locales` do próprio pacote e publica a escolha no `chrome.storage`, de onde o service worker consome (com reação a `onChanged`). Erros que cruzam a fronteira página↔popup são códigos traduzidos no destino.
+- **v1.1.0 — Correção de bug latente:** a descrição de imagens não tratava erros emitidos pelo worker — uma falha deixava um Worker "zumbi" rodando; agora o Worker é encerrado com limpeza do Blob ao primeiro erro.
 
 ## 🧪 Testes
 
@@ -115,16 +124,17 @@ Duas camadas complementares: a **suíte unitária** (Node, runner nativo, com in
 
 | Camada | Suíte | O que cobre |
 |--------|-------|-------------|
-| Unitária (Node) | `manifest.test.js` | Integridade do Manifest V3, 4 atalhos válidos, permissões mínimas, CSP, ícone PNG 128×128 real (cabeçalho binário), recursos web acessíveis |
-| Unitária (Node) | `background.test.js` | Listener de comandos, anúncios `aria-live` (WCAG 4.1.3), Modo Leitura Essencial (ARIA + foco), `reset-all`, mensagens `TRIGGER_ACTION` |
-| Unitária (Node) | `popup.test.js` | Fluxos completos dos 7 botões, 3 filtros de daltonismo aplicados ao DOM, resumo e descrição de imagens ponta a ponta (Worker substituído por um stub de mensagens), tratamento de erros |
-| Unitária (Node) | `accessibility.test.js` | axe-core no popup (violations críticas/serías = 0), contraste WCAG 1.4.3 AA em todos os pares de cor, estados de foco/hover, semântica ARIA |
-| Unitária (Node) | `css-filters.test.js` | Matrizes `feColorMatrix` válidas (20 valores, linhas RGB somam 1, canal alfa preservado) |
-| Unitária (Node) | `ai-worker.test.js` | **Inferência de IA real** — sem simulacros: o código do worker é executado de verdade com a Transformers.js 2.14.0 oficial e os modelos quantizados fixados do projeto, produzindo sumarização real (`Xenova/distilbart-cnn-12-6`) e descrição real de imagem (`Xenova/vit-gpt2-image-captioning`); valida carregamento, reuso do modelo e o protocolo de mensagens |
-| Unitária (Node) | `versoes-modelos.test.js` | Integridade do registry de versões: CDN, revisões (SHA) fixadas no worker, pré-baixa, devDependency e chave de cache do CI permanecem sincronizados com [`clarifica-ai/VERSOES_MODELOS.md`](clarifica-ai/VERSOES_MODELOS.md) |
-| **E2E (Chromium real)** | `e2e/carregamento.spec.js` | A extensão é aceita pelo Chrome de verdade: service worker MV3 registrado, popup abre com botões/`aria-live` e **zero erros de console** |
-| **E2E (Chromium real)** | `e2e/popup.spec.js` | Cliques reais no popup aplicam Leitura Essencial (ARIA + foco) e filtros de daltonismo em página HTTP real; caminho de erro do resumo; IA real opt-in (`CLARIFICA_E2E_IA=1`) |
-| **E2E (Chromium real)** | `e2e/service-worker.spec.js` | Atalhos de teclado (fluxo do `background.js`): anúncio `aria-live` assertivo, `TRIGGER_ACTION`, restauração completa da página e robustez com ação desconhecida — injeção via `chrome.scripting` real, sem adaptações |
+| Unitária (Node) | `manifest.test.js` | Integridade do Manifest V3, versão 1.1.0, `default_locale` + `_locales` presentes, 4 atalhos válidos, permissões mínimas, CSP, ícone PNG 128×128 real (cabeçalho binário), worker e `vendor/*` publicados como recursos web acessíveis |
+| Unitária (Node) | `background.test.js` | Listener de comandos com anúncios i18n (mensagem resolvida no SW e injetada como argumento), anúncios `aria-live` (WCAG 4.1.3), Modo Leitura Essencial (ARIA + foco), `reset-all`, mensagens `TRIGGER_ACTION` |
+| Unitária (Node) | `popup.test.js` | Fluxos completos dos 8 controles, 3 filtros com **intensidade interpolada**, reaplicação ao soltar o slider, persistência de tema/filtro/intensidade (`chrome.storage` restaurado ao reabrir), ciclo do tema claro/escuro, interface pt-BR, resumo e descrição de imagens ponta a ponta (Worker substituído por stub de mensagens com códigos de erro traduzidos), tratamento de erros de injeção |
+| Unitária (Node) | `accessibility.test.js` | axe-core no popup **nos temas claro e escuro** (violations críticas/serías/moderadas/menores = 0), contraste WCAG 1.4.3 AA nos pares de cor dos dois temas, estados de foco/hover, semântica ARIA |
+| Unitária (Node) | `css-filters.test.js` | A lógica pura de filtros é extraída e exercitada em Node: matrizes `feColorMatrix` válidas (20 valores, linhas RGB somam 1, alfa preservado), interpolação de intensidade (0/25/50/75/100 e fora da faixa) preservando as propriedades, formatação e construção do data URI, variáveis dos dois temas no CSS |
+| Unitária (Node) | `i18n.test.js` | Paridade total pt_BR↔en (mesmas chaves), placeholders estruturalmente corretos, toda chave usada no código/HTML existe nos dois locales, nenhuma chave órfã, textos contratados preservados |
+| Unitária (Node) | `ai-worker.test.js` | **Inferência de IA real** — sem simulacros: o código do worker é executado de verdade com a Transformers.js 2.14.0 oficial (a mesma vendada) e os modelos quantizados fixados do projeto, produzindo sumarização real (`Xenova/distilbart-cnn-12-6`) e descrição real de imagem (`Xenova/vit-gpt2-image-captioning`); valida carregamento, reuso do modelo, protocolo de mensagens e ausência de CDN |
+| Unitária (Node) | `versoes-modelos.test.js` | Integridade do registry de versões: biblioteca vendada (`vendor/transformers.min.js` + 4 WASM com cabeçalho real), worker sem CDN e com URLs locais injetadas, revisões (SHA) fixadas, manifest publicando `vendor/*`, pré-baixa, devDependency e chave de cache do CI sincronizados com [`clarifica-ai/VERSOES_MODELOS.md`](clarifica-ai/VERSOES_MODELOS.md) |
+| **E2E (Chromium real)** | `e2e/carregamento.spec.js` | A extensão é aceita pelo Chrome de verdade: service worker MV3 registrado, popup abre com botões/`aria-live`/slider/tema e **zero erros de console**; **o vendor é servido pela própria extensão e importável** (bundle 2.14.0 + WASM válido, sem CDN) |
+| **E2E (Chromium real)** | `e2e/popup.spec.js` | Cliques reais no popup aplicam Leitura Essencial (ARIA + foco) e filtros de daltonismo em página HTTP real; caminho de erro do resumo; IA real opt-in (`CLARIFICA_E2E_IA=1`) — **o worker Blob importa o bundle vendado e resume de verdade dentro do navegador** |
+| **E2E (Chromium real)** | `e2e/service-worker.spec.js` | Atalhos de teclado (espelho fiel do listener): anúncio `aria-live` assertivo com a mensagem do motor de mensagens, `TRIGGER_ACTION`, restauração completa da página e robustez com ação desconhecida — injeção via `chrome.scripting` real |
 
 **Como executar:**
 
@@ -156,7 +166,7 @@ A biblioteca de IA e cada modelo têm versão **fixada por commit (SHA)** no Hug
 
 | Versão | Foco | Itens planejados |
 |--------|------|------------------|
-| **v1.1** | Estabilidade e configuração | Empacotamento local do Transformers.js (elimina CDN e reforça a conformidade MV3); configurações persistidas com `chrome.storage` (filtro ativo, intensidade); ajuste fino da intensidade dos filtros de cor; tema claro/escuro no popup; internacionalização pt-BR/en |
+| **v1.1.0** | **Estabilidade e configuração — ✅ entregue em 07/11/2026** | Empacotamento local da Transformers.js em `vendor/` (CDN eliminado, MV3 cumprido); configurações persistidas com `chrome.storage` (tema, último filtro, intensidade); ajuste fino da intensidade dos filtros de cor (0–100%); tema claro/escuro no popup (AA nos dois temas); internacionalização pt-BR/en com motor de mensagens próprio; relatório consolidado na revisão 5 do `TEST_REPORT.md` |
 | **v1.2** | Perfis neurodivergentes | Perfil TEA (redução de estímulos: pausa de animações e GIFs, simplificação visual da página); perfil TDAH (modo foco com destaque progressivo de leitura); perfil Dislexia (espaçamento de letras e linhas, fonte adaptada, régua de leitura) |
 | **v1.3** | Áudio e multimodal | Transcrição de áudio local (Whisper quantizado) para vídeos e podcasts; OCR para extrair texto de imagens; leitura em voz alta com TTS local; tradução instantânea de trechos |
 | **v2.0** | **Versão final** | Assistente de perguntas e respostas sobre a página (QA local); modelos multilíngues pt-BR para resumo e descrição de imagens; painel de auditoria de acessibilidade da página (relatório WCAG em tempo real); sincronização de perfis; publicação na Chrome Web Store; suporte a Firefox (WebExtensions) |

@@ -6,10 +6,15 @@ const fs = require('node:fs');
 const { makeDom, readExt, contrast } = require('./helpers/env');
 
 const axeSource = fs.readFileSync(require.resolve('axe-core'), 'utf8');
+const { substituirI18n } = require('./helpers/env');
+
+function montarPopup() {
+  const html = substituirI18n(readExt('popup/popup.html')).replace('<script type="module" src="popup.js"></script>', '');
+  return makeDom(html, 'chrome-extension://clarifica-ai/popup/popup.html');
+}
 
 test('axe-core: nenhuma violação crítica ou séria no popup', async () => {
-  const html = readExt('popup/popup.html').replace('<script type="module" src="popup.js"></script>', '');
-  const dom = makeDom(html, 'chrome-extension://clarifica-ai/popup/popup.html');
+  const dom = montarPopup();
   dom.window.eval(axeSource);
   const resultados = await dom.window.axe.run(dom.window.document, {
     rules: { 'color-contrast': { enabled: false } } // verificado algebricamente na suíte abaixo
@@ -23,8 +28,7 @@ test('axe-core: nenhuma violação crítica ou séria no popup', async () => {
 });
 
 test('axe-core: popup também passa nas regras de impacto moderado/menor', async () => {
-  const html = readExt('popup/popup.html').replace('<script type="module" src="popup.js"></script>', '');
-  const dom = makeDom(html, 'chrome-extension://clarifica-ai/popup/popup.html');
+  const dom = montarPopup();
   dom.window.eval(axeSource);
   const resultados = await dom.window.axe.run(dom.window.document, {
     rules: { 'color-contrast': { enabled: false } }
@@ -33,8 +37,19 @@ test('axe-core: popup também passa nas regras de impacto moderado/menor', async
   assert.deepEqual(ids, [], `nenhuma violação remanescente; encontradas: ${ids.join(', ') || 'nenhuma'}`);
 });
 
+test('axe-core: tema escuro também passa sem violações (v1.1.0)', async () => {
+  const dom = montarPopup();
+  dom.window.document.documentElement.setAttribute('data-tema', 'escuro');
+  dom.window.eval(axeSource);
+  const resultados = await dom.window.axe.run(dom.window.document, {
+    rules: { 'color-contrast': { enabled: false } }
+  });
+  const ids = Array.from(resultados.violations).map((v) => `${v.id} (${v.impact})`);
+  assert.deepEqual(ids, [], `tema escuro sem violações; encontradas: ${ids.join(', ') || 'nenhuma'}`);
+});
+
 test('WCAG 1.4.3: todos os pares de cor do popup atendem AA (≥ 4.5:1)', () => {
-  // (texto, fundo) extraídos de popup.css e popup.html
+  // (texto, fundo) extraídos de popup.css e popup.html — tema claro
   assert.ok(contrast('#0f172a', '#ffffff') >= 4.5, `texto principal no fundo branco: ${contrast('#0f172a', '#ffffff').toFixed(2)}:1`);
   assert.ok(contrast('#2563eb', '#ffffff') >= 4.5, `título h1 azul no branco: ${contrast('#2563eb', '#ffffff').toFixed(2)}:1`);
   assert.ok(contrast('#64748b', '#ffffff') >= 4.5, `textos secundários no branco: ${contrast('#64748b', '#ffffff').toFixed(2)}:1`);
@@ -42,6 +57,15 @@ test('WCAG 1.4.3: todos os pares de cor do popup atendem AA (≥ 4.5:1)', () => 
   assert.ok(contrast('#ffffff', '#1d4ed8') >= 4.5, `texto no hover do primário: ${contrast('#ffffff', '#1d4ed8').toFixed(2)}:1`);
   assert.ok(contrast('#0f172a', '#f1f5f9') >= 4.5, `texto da barra de status: ${contrast('#0f172a', '#f1f5f9').toFixed(2)}:1`);
   assert.ok(contrast('#0f172a', '#f8fafc') >= 4.5, `texto da caixa de resultado: ${contrast('#0f172a', '#f8fafc').toFixed(2)}:1`);
+});
+
+test('WCAG 1.4.3: pares do tema escuro (v1.1.0) também atendem AA (≥ 4.5:1)', () => {
+  assert.ok(contrast('#e2e8f0', '#0f172a') >= 4.5, `texto principal no fundo escuro: ${contrast('#e2e8f0', '#0f172a').toFixed(2)}:1`);
+  assert.ok(contrast('#60a5fa', '#0f172a') >= 4.5, `título h1 no tema escuro: ${contrast('#60a5fa', '#0f172a').toFixed(2)}:1`);
+  assert.ok(contrast('#94a3b8', '#0f172a') >= 4.5, `textos secundários no escuro: ${contrast('#94a3b8', '#0f172a').toFixed(2)}:1`);
+  assert.ok(contrast('#0f172a', '#60a5fa') >= 4.5, `texto do botão primário escuro: ${contrast('#0f172a', '#60a5fa').toFixed(2)}:1`);
+  assert.ok(contrast('#0f172a', '#3b82f6') >= 4.5, `texto no hover do primário escuro: ${contrast('#0f172a', '#3b82f6').toFixed(2)}:1`);
+  assert.ok(contrast('#e2e8f0', '#1e293b') >= 4.5, `texto em superfícies elevadas (status/saída): ${contrast('#e2e8f0', '#1e293b').toFixed(2)}:1`);
 });
 
 test('WCAG 2.4.7: estados de hover/foco visíveis definidos no CSS', () => {
@@ -69,12 +93,13 @@ test('WCAG 1.3.1: hierarquia de títulos consistente no popup', () => {
   assert.ok(!/<h[4-6][\s>]/.test(html), 'sem salto de nível de título');
 });
 
-test('WCAG 3.1.1: idioma da página declarado', () => {
+test('WCAG 3.1.1: idioma da página declarado e anúncios em pt-BR', () => {
   const html = readExt('popup/popup.html');
   assert.match(html, /<html lang="pt-BR">/);
-  const bg = readExt('background.js');
-  assert.ok(/pt-BR|pt\/ br|portugu/i.test(bg) === false || true); // anúncios em português, coerentes com lang
-  assert.match(bg, /Resumindo página/); // conteúdo dos anúncios em pt-BR
+  // Os anúncios do service worker são resolvidos pelo chrome.i18n no
+  // default_locale pt_BR — o texto real vive em _locales/pt_BR/messages.json.
+  const pt = JSON.parse(readExt('_locales', 'pt_BR', 'messages.json'));
+  assert.match(pt.anuncioResumo.message, /Resumindo página/);
 });
 
 test('anúncios visualmente ocultos permanecem legíveis para leitores de tela', () => {

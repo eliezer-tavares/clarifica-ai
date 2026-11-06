@@ -26,6 +26,10 @@ async function iniciarNavegadorComExtensao() {
   const context = await chromium.launchPersistentContext('', {
     channel: 'chromium',
     headless: true,
+    // pt-BR fixado: os textos da interface são resolvidos por chrome.i18n
+    // (default_locale pt_BR) — os asserts E2E cobrem o idioma do usuário
+    // brasileiro, determinístico em qualquer máquina de CI.
+    locale: 'pt-BR',
     args: [
       `--disable-extensions-except=${RAIZ_EXTENSAO}`,
       `--load-extension=${RAIZ_EXTENSAO}`,
@@ -36,6 +40,14 @@ async function iniciarNavegadorComExtensao() {
 
   const [sw] = context.serviceWorkers();
   const serviceWorker = sw || await context.waitForEvent('serviceworker', { timeout: 20000 });
+
+  // Semeia o idioma do teste no chrome.storage: o service worker resolve o
+  // idioma pelo storage publicado pelo popup (navigator.languages e as APIs
+  // de locale não são confiáveis no SW do Chromium headless) — adaptação de
+  // teste da mesma família da resolução da "aba ativa", documentada no
+  // TEST_REPORT.md. Em produção o popup publica o idioma real do usuário.
+  await serviceWorker.evaluate(() => chrome.storage.local.set({ idioma: 'pt_BR' }));
+  await new Promise((r) => setTimeout(r, 200)); // onChanged do SW re-carrega as mensagens
 
   const idExtensao = serviceWorker.url().match(/chrome-extension:\/\/([^/]+)\//)[1];
   const urlPopup = `chrome-extension://${idExtensao}/popup/popup.html`;

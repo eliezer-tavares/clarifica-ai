@@ -46,7 +46,45 @@ test('popup abre como página real: 6 botões, barra de status aria-live e zero 
   expect(rotulos.some((t) => t.includes('Imagens'))).toBe(true);
   expect(rotulos.filter((t) => /Protanopia|Deuteranopia|Tritanopia/.test(t))).toHaveLength(3);
 
+  // Novidades da v1.1 presentes no popup real: slider de intensidade e
+  // botão de tema (rotulado, i18n pt-BR aplicado pelo Chrome).
+  await expect(popup.locator('#intensidade')).toHaveAttribute('type', 'range');
+  await expect(popup.locator('label[for="intensidade"]')).toContainText('Intensidade');
+  await expect(popup.locator('#btn-tema')).toContainText('Tema');
+
   // Nenhum erro de JavaScript no popup real (CSP, recursos ausentes,
   // referências quebradas aparecem aqui antes de quebrarem o usuário).
+  expect(navegador.erros).toEqual([]);
+});
+
+test('vendor local (v1.1.0): Transformers.js 2.14.0 é servida pela própria extensão e importável', async () => {
+  const { popup, idExtensao } = navegador;
+
+  const resultado = await popup.evaluate(async (id) => {
+    const url = chrome.runtime.getURL('vendor/transformers.min.js');
+    const resposta = await fetch(url);
+    if (!resposta.ok) return { ok: false, motivo: `fetch ${resposta.status}` };
+    const modulo = await import(url);
+    return {
+      ok: true,
+      versao: modulo.env?.version,
+      bytes: (await resposta.arrayBuffer()).byteLength
+    };
+  }, idExtensao);
+
+  expect(resultado.ok).toBe(true);
+  expect(resultado.versao).toBe('2.14.0');
+  expect(resultado.bytes).toBeGreaterThan(500_000);
+
+  // E o WASM do onnxruntime também é servido localmente, sem CDN.
+  const wasmOk = await popup.evaluate(async () => {
+    const resposta = await fetch(chrome.runtime.getURL('vendor/ort-wasm-simd.wasm'));
+    if (!resposta.ok) return false;
+    const bytes = new Uint8Array(await resposta.arrayBuffer());
+    return bytes[0] === 0x00 && bytes[1] === 0x61 && bytes[2] === 0x73 && bytes[3] === 0x6d; // "\0asm"
+  });
+  expect(wasmOk).toBe(true);
+
+  // Nenhum erro de console durante todo o exercício do vendor.
   expect(navegador.erros).toEqual([]);
 });

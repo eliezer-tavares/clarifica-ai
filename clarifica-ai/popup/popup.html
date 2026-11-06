@@ -7,30 +7,39 @@
 </head>
 <body>
   <header>
-    <h1>🧠 Clarifica.ai</h1>
-    <p>IA Local • Privacidade Total</p>
+    <div>
+      <h1>🧠 Clarifica.ai</h1>
+      <p>__MSG_subtitulo__</p>
+    </div>
+    <button id="btn-tema" class="tema-btn" type="button">__MSG_btnTemaRotuloAuto__</button>
   </header>
   <main>
-    <div id="status" class="status-bar" role="status" aria-live="polite">Pronto. Use atalhos ou clique abaixo.</div>
+    <div id="status" class="status-bar" role="status" aria-live="polite">__MSG_statusPronto__</div>
 
-    <h2 style="font-size: 0.9rem; margin-top: 16px; color: #64748b;">Acessibilidade Cognitiva e Visual</h2>
+    <h2 class="secao-titulo">__MSG_secaoCognitiva__</h2>
     <div class="grid-buttons">
-      <button class="mode-btn" data-mode="leitura">📖 Modo Leitura Essencial</button>
-      <button class="mode-btn primary" data-mode="resumo">✨ Resumir Texto com IA</button>
-      <button class="mode-btn" data-mode="imagens">🖼️ Descrever Imagens</button>
+      <button class="mode-btn" data-mode="leitura">__MSG_btnLeitura__</button>
+      <button class="mode-btn primary" data-mode="resumo">__MSG_btnResumo__</button>
+      <button class="mode-btn" data-mode="imagens">__MSG_btnImagens__</button>
     </div>
 
-    <h2 style="font-size: 0.9rem; margin-top: 16px; color: #64748b;">Filtros para Daltonismo</h2>
+    <h2 class="secao-titulo">__MSG_secaoDaltonismo__</h2>
     <div class="grid-buttons">
-      <button class="mode-btn dalton" data-mode="protanopia">🔴 Protanopia (Vermelho)</button>
-      <button class="mode-btn dalton" data-mode="deuteranopia">🟢 Deuteranopia (Verde)</button>
-      <button class="mode-btn dalton" data-mode="tritanopia">🔵 Tritanopia (Azul)</button>
+      <button class="mode-btn dalton" data-mode="protanopia">__MSG_btnProtanopia__</button>
+      <button class="mode-btn dalton" data-mode="deuteranopia">__MSG_btnDeuteranopia__</button>
+      <button class="mode-btn dalton" data-mode="tritanopia">__MSG_btnTritanopia__</button>
+    </div>
+
+    <div class="slider-row">
+      <label for="intensidade">__MSG_labelIntensidade__</label>
+      <input type="range" id="intensidade" min="0" max="100" step="5" value="100">
+      <span id="intensidade-valor" class="slider-valor" aria-hidden="true">100%</span>
     </div>
 
     <div id="result-area" class="hidden">
-      <h3>Resultado:</h3>
-      <div id="ai-output" class="output-box" role="region" aria-label="Resultado da IA"></div>
-      <button id="close-result" class="text-btn">Fechar</button>
+      <h3>__MSG_tituloResultado__</h3>
+      <div id="ai-output" class="output-box" role="region" aria-label="__MSG_ariaResultado__"></div>
+      <button id="close-result" class="text-btn">__MSG_btnFechar__</button>
     </div>
   </main>
   <script type="module" src="popup.js"></script>

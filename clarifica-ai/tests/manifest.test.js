@@ -9,9 +9,15 @@ const manifest = JSON.parse(readExt('manifest.json'));
 test('manifest: JSON válido com essenciais do Manifest V3', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'Clarifica.ai');
-  assert.match(manifest.version, /^\d+\.\d+\.\d+$/);
+  assert.equal(manifest.version, '1.1.0', 'versão da release corrente (atualizar o teste ao subir versão)');
   assert.ok(manifest.description.length > 20, 'descrição significativa');
   assert.match(manifest.description, /offline/i);
+});
+
+test('manifest: default_locale pt_BR com _locales pt_BR e en presentes', () => {
+  assert.equal(manifest.default_locale, 'pt_BR');
+  assert.ok(fs.existsSync(ext('_locales', 'pt_BR', 'messages.json')), 'locale padrão existe');
+  assert.ok(fs.existsSync(ext('_locales', 'en', 'messages.json')), 'locale inglês existe');
 });
 
 test('manifest: todos os arquivos referenciados existem no pacote', () => {
@@ -49,9 +55,10 @@ test('manifest: permissões mínimas e CSP restritiva', () => {
   assert.ok(!csp.includes('unsafe-inline'), 'sem unsafe-inline');
 });
 
-test('manifest: worker de IA publicado como recurso web acessível', () => {
+test('manifest: worker de IA e vendor publicados como recursos web acessíveis', () => {
   const recursos = (manifest.web_accessible_resources || []).flatMap((w) => w.resources || []);
   assert.ok(recursos.includes('scripts/ai-worker.js'), 'ai-worker.js precisa ser web_accessible para páginas criarem o Worker');
+  assert.ok(recursos.includes('vendor/*'), 'vendor/* (biblioteca vendada + WASM) precisa ser web_accessible (import do Worker)');
 });
 
 test('manifest: autoria (e-mail de contato) e versão mínima do Chrome', () => {

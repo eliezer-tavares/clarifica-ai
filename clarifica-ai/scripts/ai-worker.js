@@ -1,17 +1,35 @@
 // Cérebro de IA do Clarifica.ai. Roda isolado em Web Worker para não
 // travar a thread principal do navegador durante a inferência.
 //
-// Versionamento: biblioteca e modelos são FIXADOS (sem branch flutuante) —
-// a fonte de verdade das versões é o registry em VERSOES_MODELOS.md, na
-// raiz, auditado por tests/versoes-modelos.test.js.
+// Versionamento (ver VERSOES_MODELOS.md, auditado por
+// tests/versoes-modelos.test.js): biblioteca e modelos são FIXADOS, sem
+// branch flutuante. Desde a v1.1.0 a biblioteca Transformers.js NÃO vem
+// mais de CDN: o bundle oficial da versão fixada é vendado em
+// vendor/transformers.min.js (com os binários WASM do onnxruntime em
+// vendor/), e o import abaixo recebe uma URL injetada pelo popup antes da
+// criação do Worker via Blob:
+//
+//   '__CLARIFICA_BIBLIOTECA__'  →  chrome.runtime.getURL('vendor/transformers.min.js')
+//   '__CLARIFICA_VENDOR_BASE__' →  chrome.runtime.getURL('vendor/')
+//
+// Em Node (suíte de testes, ai-worker.test.js) o primeiro placeholder é
+// trocado pelo pacote npm @xenova/transformers na MESMA versão fixada, e o
+// segundo permanece intacto (em Node a inferência usa o ONNX Runtime
+// nativo, sem WASM). O código nunca roda com os placeholders originais.
 
-import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.14.0';
+import { pipeline, env } from '__CLARIFICA_BIBLIOTECA__';
 
 env.allowLocalModels = false;
 // Cache do navegador só existe em contextos seguros (https / localhost);
 // em páginas http o valor true faria a inferência falhar — degrada para
 // cache em memória (modelo re-carregado por página) em vez de quebrar.
 env.useBrowserCache = typeof caches !== 'undefined';
+
+// Binários WASM do onnxruntime servidos pela própria extensão (sem CDN).
+const baseVendor = '__CLARIFICA_VENDOR_BASE__';
+if (!baseVendor.startsWith('__')) {
+  env.backends.onnx.wasm.wasmPaths = baseVendor;
+}
 
 let summarizer = null;
 let imageCaptioner = null;
@@ -32,7 +50,9 @@ self.onmessage = async (event) => {
       const output = await summarizer(data, { max_new_tokens: 150, min_new_tokens: 50, do_sample: false });
       self.postMessage({ status: "success", summary: output[0].summary_text });
     } catch (error) {
-      self.postMessage({ status: "error", error: "Erro ao processar texto." });
+      // Códigos de erro (não texto) para que o popup traduza no idioma da
+      // interface — o Worker roda em página injetada, sem chrome.i18n.
+      self.postMessage({ status: "error", error: "erro-resumo" });
     }
   }
 
@@ -48,7 +68,7 @@ self.onmessage = async (event) => {
       const output = await imageCaptioner(data);
       self.postMessage({ type: 'image-description', description: output[0].generated_text, imageUrl: data });
     } catch (error) {
-      self.postMessage({ type: 'error', error: "Falha ao descrever imagem." });
+      self.postMessage({ type: 'error', error: "erro-imagem" });
     }
   }
 };
