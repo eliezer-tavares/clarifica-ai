@@ -9,7 +9,7 @@ const manifest = JSON.parse(readExt('manifest.json'));
 test('manifest: JSON válido com essenciais do Manifest V3', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'Clarifica.ai');
-  assert.equal(manifest.version, '1.1.0', 'versão da release corrente (atualizar o teste ao subir versão)');
+  assert.equal(manifest.version, '1.2.0', 'versão da release corrente (atualizar o teste ao subir versão)');
   assert.ok(manifest.description.length > 20, 'descrição significativa');
   assert.match(manifest.description, /offline/i);
 });
@@ -33,7 +33,7 @@ test('manifest: ícone é um PNG real de 128×128 (cabeçalho binário)', () => 
   assert.equal(buf.readUInt32BE(20), 128, 'altura 128');
 });
 
-test('manifest: os 4 atalhos de teclado existem e são válidos', () => {
+test('manifest: os 4 atalhos de teclado existem e são válidos (perfis são acionados pelo popup — nenhum atalho novo para não colidir com os existentes)', () => {
   const cmds = Object.keys(manifest.commands).sort();
   assert.deepEqual(cmds, ['toggle-imagens', 'toggle-leitura', 'toggle-reset', 'toggle-resumo']);
   const esperados = { 'toggle-resumo': 'Ctrl+Shift+R', 'toggle-leitura': 'Ctrl+Shift+L', 'toggle-imagens': 'Ctrl+Shift+A', 'toggle-reset': 'Ctrl+Shift+X' };

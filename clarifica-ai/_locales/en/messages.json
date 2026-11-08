@@ -39,6 +39,22 @@
   "nomeProtanopia": { "message": "Protanopia" },
   "nomeDeuteranopia": { "message": "Deuteranopia" },
   "nomeTritanopia": { "message": "Tritanopia" },
+  "secaoPerfis": { "message": "Neurodivergent Profiles" },
+  "btnPerfilTea": { "message": "🧩 ASD profile — less stimulation" },
+  "btnPerfilTdah": { "message": "🎯 ADHD profile — focus" },
+  "btnPerfilDislexia": { "message": "🔤 Dyslexia profile — reading" },
+  "statusPerfilOk": {
+    "message": "$perfil$ profile activated.",
+    "placeholders": { "perfil": { "content": "$1" } }
+  },
+  "statusPerfilDesligado": { "message": "Profile turned off." },
+  "nomePerfilTea": { "message": "ASD" },
+  "nomePerfilTdah": { "message": "ADHD" },
+  "nomePerfilDislexia": { "message": "Dyslexia" },
+  "anuncioPerfilNaPagina": {
+    "message": "Clarifica.ai: $perfil$ profile activated.",
+    "placeholders": { "perfil": { "content": "$1" } }
+  },
   "anuncioResumo": { "message": "Clarifica.ai: Summarizing the page with artificial intelligence." },
   "anuncioLeitura": { "message": "Clarifica.ai: Essential Reading Mode activated. Noise silenced." },
   "anuncioImagens": { "message": "Clarifica.ai: Starting image description. Please wait." },

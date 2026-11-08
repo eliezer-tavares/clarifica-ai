@@ -71,6 +71,70 @@ function filtroDaltonismoCss(tipo, intensidade) {
 
 // === FIM DA LÓGICA PURA DE FILTROS ===
 
+// === INÍCIO DA LÓGICA PURA DE PERFIS NEURODIVERGENTES (v1.2.0: seção
+// extrável — exercitada em Node por perfis.test.js, sem DOM nem chrome.*) ===
+//
+// Três perfis prontos, planejados no roadmap do README e materializados
+// com CSS/DOM/JS nativos — nenhum deles usa IA, rede ou permissão nova:
+//   tea      → menos estímulos: pausa animações/transições, converte GIFs
+//              animados em um quadro estático (canvas, sem rede) e remove
+//              sombras/blur (ruído visual).
+//   tdah     → foco: holofote que escurece a página ao redor do cursor e
+//              navegação progressiva por blocos de leitura (Alt+↓/↑).
+//   dislexia → leitura: espaçamento de letras/palavras/linhas, fonte de
+//              leitura do sistema e régua que acompanha o mouse.
+// O CSS de cada perfil nasce AQUI (testável) e cruza a fronteira como
+// argumento — funções injetadas não enxergam o escopo do popup.js.
+
+const NOMES_PERFIS = {
+  tea: 'nomePerfilTea',
+  tdah: 'nomePerfilTdah',
+  dislexia: 'nomePerfilDislexia'
+};
+
+const TIPOS_PERFIL = Object.keys(NOMES_PERFIS);
+
+// Elementos de texto que recebem o ajuste tipográfico do perfil dislexia.
+const ALVO_TEXTO = 'p, li, h1, h2, h3, h4, h5, h6, blockquote, dd, dt, figcaption, td, th, span, a, label, button, summary';
+// Trechos de código ficam de fora do espaçamento (indentação é significativa)
+// e voltam à fonte monoespaçada — regra colocada por ÚLTIMO para vencer.
+const ALVO_MONO = 'code, pre, kbd, samp, textarea, input';
+
+function cssPerfil(nome) {
+  if (nome === 'tea') {
+    return [
+      // Pausa (não pula para o estado final): animações congelam onde estão.
+      '*, *::before, *::after { animation-play-state: paused !important; transition: none !important; scroll-behavior: auto !important; }',
+      // Simplificação visual — html fica de fora para NÃO apagar o filtro
+      // de daltonismo, que vive como filter no documentElement.
+      '*:not(html):not(head):not(style):not(script):not(link):not(meta) { box-shadow: none !important; text-shadow: none !important; backdrop-filter: none !important; filter: none !important; }'
+    ].join('\n');
+  }
+  if (nome === 'tdah') {
+    return [
+      // Holofote: um buraco transparente segue o cursor; o resto escurece.
+      '#clarifica-spotlight { position: fixed; inset: 0; pointer-events: none; z-index: 2147483646; background: radial-gradient(circle 170px at var(--clarifica-x, 50%) var(--clarifica-y, 40%), rgba(0, 0, 0, 0) 0px, rgba(0, 0, 0, 0) 150px, rgba(2, 6, 23, 0.82) 240px); }',
+      // Bloco de leitura em destaque (navegação Alt+↓/↑).
+      '.clarifica-destaque-leitura { outline: 3px solid #2563eb; outline-offset: 3px; background: rgba(250, 204, 21, 0.35) !important; border-radius: 2px; }'
+    ].join('\n');
+  }
+  if (nome === 'dislexia') {
+    return [
+      `${ALVO_TEXTO} { letter-spacing: 0.05em !important; word-spacing: 0.12em !important; }`,
+      `${ALVO_TEXTO} { line-height: 1.8 !important; }`,
+      `${ALVO_TEXTO} { font-family: Verdana, Tahoma, 'Segoe UI', Arial, sans-serif !important; }`,
+      `${ALVO_MONO} { letter-spacing: normal !important; word-spacing: normal !important; line-height: normal !important; font-family: ui-monospace, 'Cascadia Mono', 'Courier New', monospace !important; }`,
+      // Régua de leitura: faixa fixa de 48 px que o JS centraliza 24 px acima
+      // do cursor. pointer-events:none garante que ela nunca bloqueie cliques;
+      // o top fora da tela evita uma faixa solta antes do primeiro mousemove.
+      '#clarifica-regua { position: fixed; left: 0; right: 0; top: -100px; height: 48px; box-sizing: border-box; border-top: 2px solid rgba(37, 99, 235, 0.85); border-bottom: 2px solid rgba(37, 99, 235, 0.85); background: rgba(37, 99, 235, 0.08); pointer-events: none; z-index: 2147483646; }'
+    ].join('\n');
+  }
+  return '';
+}
+
+// === FIM DA LÓGICA PURA DE PERFIS NEURODIVERGENTES ===
+
 // ---- Motor de mensagens (v1.1.0) ----
 // As mensagens vivem em _locales/<locale>/messages.json (fonte única, os
 // mesmos arquivos do padrão chrome.i18n). O getMessage nativo depende do
@@ -175,6 +239,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let intensidadeAtual = 100;
   let ultimoFiltro = null;
+  let perfilAtivo = null;
 
   const mensagem = (chave, args) => mensagemResolvida(mensagensCache, chave, args);
 
@@ -186,11 +251,57 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   async function carregarConfig() {
     try {
-      const cfg = await chrome.storage.local.get({ tema: 'auto', intensidade: 100, ultimoFiltro: null });
+      const cfg = await chrome.storage.local.get({ tema: 'auto', intensidade: 100, ultimoFiltro: null, perfilAtivo: null });
       aplicarTema(cfg.tema);
       definirIntensidade(cfg.intensidade);
       if (TIPOS_FILTRO.includes(cfg.ultimoFiltro)) destacarFiltro(cfg.ultimoFiltro);
+      // Perfis neurodivergentes (v1.2.0): o botão do perfil ativo é
+      // restaurado ao reabrir o popup (o efeito na página é por visita,
+      // como nos filtros — reativar é um clique).
+      if (TIPOS_PERFIL.includes(cfg.perfilAtivo)) destacarPerfil(cfg.perfilAtivo);
     } catch (e) { /* mantém os padrões */ }
+  }
+
+  // ---- Perfis neurodivergentes (v1.2.0) ----
+  // Destaque visual do perfil ativo nos três botões (aria-pressed para
+  // leitores de tela — WCAG 4.1.2).
+  function destacarPerfil(nome) {
+    perfilAtivo = TIPOS_PERFIL.includes(nome) ? nome : null;
+    document.querySelectorAll('.mode-btn.perfil').forEach((b) => {
+      const ativo = perfilAtivo !== null && b.dataset.mode === perfilAtivo;
+      b.classList.toggle('ativo', ativo);
+      if (ativo) b.setAttribute('aria-pressed', 'true');
+      else b.removeAttribute('aria-pressed');
+    });
+  }
+
+  async function aplicarPerfil(nome) {
+    const nomeTraduzido = mensagem(NOMES_PERFIS[nome]);
+    const r = await enviarParaContent('perfil-' + nome, {
+      css: cssPerfil(nome),
+      anuncioPerfil: mensagem('anuncioPerfilNaPagina', [nomeTraduzido])
+    });
+    if (r && r.success) {
+      statusEl.textContent = mensagem('statusPerfilOk', [nomeTraduzido]);
+      destacarPerfil(nome);
+      await salvarConfig({ perfilAtivo: nome });
+    } else {
+      // A página NÃO recebeu o perfil: a UI não pode afirmar que está ativo.
+      statusEl.textContent = (r && r.error) ? textoDeErro(r.error) : mensagem('statusInjecaoErro');
+      destacarPerfil(null);
+    }
+  }
+
+  async function desligarPerfil() {
+    const r = await enviarParaContent('perfil-desligar');
+    if (r && r.success) {
+      statusEl.textContent = mensagem('statusPerfilDesligado');
+      destacarPerfil(null);
+      await salvarConfig({ perfilAtivo: null });
+    } else {
+      // Falhou a limpeza na página: o perfil permanece como estava.
+      statusEl.textContent = (r && r.error) ? textoDeErro(r.error) : mensagem('statusInjecaoErro');
+    }
   }
 
   // ---- Tema claro/escuro (ciclo auto → claro → escuro) ----
@@ -288,6 +399,12 @@ document.addEventListener('DOMContentLoaded', () => {
       else if (TIPOS_FILTRO.includes(mode)) {
         await aplicarFiltro(mode);
       }
+      else if (TIPOS_PERFIL.includes(mode)) {
+        // Perfis são exclusivos entre si: clicar no ativo desliga; clicar
+        // em outro troca (a página limpa o anterior antes de aplicar).
+        if (perfilAtivo === mode) await desligarPerfil();
+        else await aplicarPerfil(mode);
+      }
     });
   });
 
@@ -318,6 +435,176 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function manipularPagina(acao, extras = null) {
+    // ---- Perfis neurodivergentes (v1.2.0) — helpers da PÁGINA ----
+    // IMPORTANTE: tudo abaixo vive DENTRO de manipularPagina porque o
+    // Chrome serializa apenas o corpo desta função na injeção.
+    function limparPerfisDaPagina() {
+      // Remove estilos e elementos criados pelos 3 perfis (idempotente).
+      for (const id of ['clarifica-perfil-tea', 'clarifica-perfil-tdah', 'clarifica-perfil-dislexia', 'clarifica-spotlight', 'clarifica-regua']) {
+        const el = document.getElementById(id);
+        if (el) el.remove();
+      }
+      document.querySelectorAll('.clarifica-destaque-leitura').forEach((el) => el.classList.remove('clarifica-destaque-leitura'));
+      // Restaura os GIFs que viraram canvas (pares canvas → img original).
+      const gifs = window.__clarificaGifsPerfilTea;
+      if (Array.isArray(gifs)) {
+        for (const par of gifs) {
+          try { par.canvas.replaceWith(par.original); } catch (e) { /* nó fora do DOM */ }
+        }
+        window.__clarificaGifsPerfilTea = [];
+      }
+      // Desfaz os listeners registrados pelos perfis (mousemove, teclado).
+      const limpeza = window.__clarificaLimpezaPerfis;
+      if (typeof limpeza === 'function') {
+        try { limpeza(); } catch (e) { /* listeners já removidos */ }
+      }
+      window.__clarificaLimpezaPerfis = null;
+      window.__clarificaIndiceBloco = -1;
+    }
+
+    // Anúncio para leitores de tela (mensagem já traduzida pelo popup).
+    // Apenas UM anúncio por vez na página: ao aplicar um novo filtro ou
+    // perfil, o anúncio anterior é removido — regiões assertive empilhadas
+    // fariam o leitor de tela re-ler anúncios antigos (WCAG 4.1.3). Mesma
+    // conduta do anúncio do service worker (background.js).
+    function anunciarNaPagina(texto) {
+      document.querySelectorAll('.clarifica-anuncio').forEach((a) => a.remove());
+      const anuncio = document.createElement('div');
+      anuncio.className = 'clarifica-anuncio';
+      anuncio.setAttribute('role', 'status');
+      anuncio.setAttribute('aria-live', 'assertive');
+      anuncio.textContent = texto;
+      document.body.appendChild(anuncio);
+      setTimeout(() => anuncio.remove(), 3000);
+    }
+
+    if (acao.startsWith('perfil-')) {
+      const nome = acao.replace('perfil-', '');
+      // Sempre desmonta o perfil anterior antes de qualquer coisa — perfis
+      // são exclusivos entre si e re-aplicar é idempotente.
+      limparPerfisDaPagina();
+      if (nome === 'desligar' || !['tea', 'tdah', 'dislexia'].includes(nome)) {
+        return { success: true };
+      }
+
+      const estilo = document.createElement('style');
+      estilo.id = 'clarifica-perfil-' + nome;
+      estilo.textContent = (extras && extras.css) || '';
+      document.documentElement.appendChild(estilo);
+
+      // Listeners deste perfil; a limpeza fica registrada em window para o
+      // reset-all (que pode vir do atalho Ctrl+Shift+X, via service worker).
+      const limpezas = [];
+
+      if (nome === 'tea') {
+        // Congela também animações da Web Animations API (CSS já pausou as
+        // declaradas via stylesheet — getAnimations cobre o resto).
+        if (typeof document.getAnimations === 'function') {
+          try {
+            document.getAnimations().forEach((anim) => {
+              try { anim.pause(); } catch (e) { /* animação já terminada */ }
+            });
+          } catch (e) { /* API indisponível */ }
+        }
+        // GIFs animados → quadro estático em canvas (sem rede, sem modelo).
+        window.__clarificaGifsPerfilTea = [];
+        for (const img of Array.from(document.querySelectorAll('img'))) {
+          const src = img.getAttribute('src') || '';
+          if (!/\.gif(\?|#|$)/i.test(src)) continue;
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth || img.width || 300;
+            canvas.height = img.naturalHeight || img.height || 300;
+            const contexto = canvas.getContext && canvas.getContext('2d');
+            if (!contexto) break; // sem canvas: mantém o GIF original, sem quebrar
+            contexto.drawImage(img, 0, 0, canvas.width, canvas.height);
+            // Canvas não tem semântica de imagem: `alt` nele é atributo morto.
+            // role="img" + aria-label preservam para o leitor de tela o texto
+            // alternativo do GIF que acabou de ser substituído.
+            const alt = img.getAttribute('alt');
+            if (alt) {
+              canvas.setAttribute('role', 'img');
+              canvas.setAttribute('aria-label', alt);
+            }
+            window.__clarificaGifsPerfilTea.push({ canvas, original: img });
+            img.replaceWith(canvas);
+          } catch (e) { /* imagem indisponível: segue com as demais */ }
+        }
+      }
+
+      if (nome === 'tdah') {
+        // Holofote: o buraco segue o cursor (mousemove + rAF de throttle).
+        const spot = document.createElement('div');
+        spot.id = 'clarifica-spotlight';
+        document.body.appendChild(spot);
+        const aplicarPosicao = (x, y) => {
+          spot.style.setProperty('--clarifica-x', x + 'px');
+          spot.style.setProperty('--clarifica-y', y + 'px');
+        };
+        let quadroPendente = null;
+        const moverSpot = (evento) => {
+          const x = evento.clientX || 0;
+          const y = evento.clientY || 0;
+          if (typeof requestAnimationFrame !== 'function') { aplicarPosicao(x, y); return; }
+          if (quadroPendente !== null) return;
+          quadroPendente = requestAnimationFrame(() => {
+            quadroPendente = null;
+            aplicarPosicao(x, y);
+          });
+        };
+        window.addEventListener('mousemove', moverSpot, true);
+        limpezas.push(() => window.removeEventListener('mousemove', moverSpot, true));
+
+        // Destaque progressivo de leitura: Alt+↓ avança, Alt+↑ volta —
+        // o bloco atual recebe a classe de destaque e o foco visual.
+        const blocosDeLeitura = () => Array.from(
+          document.querySelectorAll('p, li, h1, h2, h3, h4, h5, h6, blockquote, pre')
+        ).filter((el) => (el.textContent || '').trim().length > 0).slice(0, 400);
+        window.__clarificaIndiceBloco = -1;
+        const destacarBloco = (indice) => {
+          const lista = blocosDeLeitura();
+          if (lista.length === 0) return;
+          window.__clarificaIndiceBloco = Math.max(0, Math.min(lista.length - 1, indice));
+          document.querySelectorAll('.clarifica-destaque-leitura').forEach((el) => el.classList.remove('clarifica-destaque-leitura'));
+          const alvo = lista[window.__clarificaIndiceBloco];
+          alvo.classList.add('clarifica-destaque-leitura');
+          if (typeof alvo.scrollIntoView === 'function') {
+            try { alvo.scrollIntoView({ block: 'center' }); } catch (e) { /* sem rolagem */ }
+          }
+        };
+        const teclado = (evento) => {
+          if (!evento.altKey) return;
+          if (evento.key === 'ArrowDown') destacarBloco((window.__clarificaIndiceBloco ?? -1) + 1);
+          else if (evento.key === 'ArrowUp') destacarBloco(Math.max(0, (window.__clarificaIndiceBloco ?? 0) - 1));
+        };
+        document.addEventListener('keydown', teclado, true);
+        limpezas.push(() => document.removeEventListener('keydown', teclado, true));
+      }
+
+      if (nome === 'dislexia') {
+        // Régua de leitura: faixa horizontal que acompanha o mouse e ajuda
+        // a não perder a linha atual.
+        const regua = document.createElement('div');
+        regua.id = 'clarifica-regua';
+        document.body.appendChild(regua);
+        const moverRegua = (evento) => {
+          regua.style.top = Math.max(0, (evento.clientY || 0) - 24) + 'px';
+        };
+        window.addEventListener('mousemove', moverRegua, true);
+        limpezas.push(() => window.removeEventListener('mousemove', moverRegua, true));
+      }
+
+      window.__clarificaLimpezaPerfis = () => {
+        for (const fn of limpezas) {
+          try { fn(); } catch (e) { /* listener já removido */ }
+        }
+      };
+
+      anunciarNaPagina((extras && extras.anuncioPerfil) || '');
+
+      return { success: true, perfil: nome };
+    }
+
     // Cria o worker de IA a partir de um Blob com o código buscado da
     // extensão (web_accessible_resources): a via direta
     // new Worker('chrome-extension://...') é bloqueada pelo Chrome com
@@ -363,12 +650,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // do popup.js.
       document.documentElement.style.filter = (extras && extras.cssFilter) || '';
 
-      const anuncio = document.createElement('div');
-      anuncio.setAttribute('role', 'status');
-      anuncio.setAttribute('aria-live', 'assertive');
-      anuncio.textContent = (extras && extras.anuncioFiltro) || '';
-      document.body.appendChild(anuncio);
-      setTimeout(() => anuncio.remove(), 3000);
+      anunciarNaPagina((extras && extras.anuncioFiltro) || '');
 
       return { success: true };
     }

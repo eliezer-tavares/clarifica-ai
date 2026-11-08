@@ -28,10 +28,10 @@ test('manifest aceito pelo Chrome real: service worker MV3 registrado', async ()
   expect(url).toMatch(/\/background\.js$/);
 });
 
-test('popup abre como página real: 6 botões, barra de status aria-live e zero erros de console', async () => {
+test('popup abre como página real: 9 botões, barra de status aria-live e zero erros de console', async () => {
   const { popup } = navegador;
 
-  await expect(popup.locator('.mode-btn')).toHaveCount(6);
+  await expect(popup.locator('.mode-btn')).toHaveCount(9);
 
   const status = popup.locator('#status');
   await expect(status).toHaveAttribute('role', 'status');
@@ -45,6 +45,11 @@ test('popup abre como página real: 6 botões, barra de status aria-live e zero 
   expect(rotulos.some((t) => t.includes('Resumir'))).toBe(true);
   expect(rotulos.some((t) => t.includes('Imagens'))).toBe(true);
   expect(rotulos.filter((t) => /Protanopia|Deuteranopia|Tritanopia/.test(t))).toHaveLength(3);
+
+  // Perfis neurodivergentes da v1.2.0 presentes no popup real.
+  expect(rotulos.some((t) => /Perfil TEA/.test(t))).toBe(true);
+  expect(rotulos.some((t) => /Perfil TDAH/.test(t))).toBe(true);
+  expect(rotulos.some((t) => /Perfil Dislexia/.test(t))).toBe(true);
 
   // Novidades da v1.1 presentes no popup real: slider de intensidade e
   // botão de tema (rotulado, i18n pt-BR aplicado pelo Chrome).

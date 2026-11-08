@@ -156,6 +156,30 @@ function executarAcao(acao) {
       el.removeAttribute('aria-hidden');
       el.removeAttribute('inert');
     });
+    // Perfis neurodivergentes (v1.2.0): desmonta estilos/elementos/listeners
+    // dos três perfis — espelho fiel da limpeza do popup.js (a função
+    // injetada não compartilha escopo com o popup; a paridade é garantida
+    // por testes em background.test.js e perfis.test.js).
+    for (const id of ['clarifica-perfil-tea', 'clarifica-perfil-tdah', 'clarifica-perfil-dislexia', 'clarifica-spotlight', 'clarifica-regua']) {
+      const el = document.getElementById(id);
+      if (el) el.remove();
+    }
+    document.querySelectorAll('.clarifica-destaque-leitura').forEach(el => {
+      el.classList.remove('clarifica-destaque-leitura');
+    });
+    const gifs = window.__clarificaGifsPerfilTea;
+    if (Array.isArray(gifs)) {
+      for (const par of gifs) {
+        try { par.canvas.replaceWith(par.original); } catch (e) { /* nó fora do DOM */ }
+      }
+      window.__clarificaGifsPerfilTea = [];
+    }
+    const limpeza = window.__clarificaLimpezaPerfis;
+    if (typeof limpeza === 'function') {
+      try { limpeza(); } catch (e) { /* listeners já removidos */ }
+    }
+    window.__clarificaLimpezaPerfis = null;
+    window.__clarificaIndiceBloco = -1;
   }
   else if (acao === 'summarize' || acao === 'describe-images') {
     window.postMessage({ type: 'TRIGGER_ACTION', action: acao }, '*');

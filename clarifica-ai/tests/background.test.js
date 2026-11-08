@@ -136,6 +136,61 @@ test('background: reset-all restaura aria-hidden/inert, filtro e caixa de resumo
   assert.equal(document.documentElement.style.filter, '', 'filtro removido');
 });
 
+test('background: reset-all também desmonta os Perfis Neurodivergentes (v1.2.0)', async () => {
+  const { window, document } = await setup();
+
+  // Estado sujo dos três perfis, como o popup.js os deixaria na página:
+  // estilos, holofote, régua, bloco destacado, GIF convertido em canvas e
+  // listeners registrados para limpeza.
+  for (const [id, texto] of [
+    ['clarifica-perfil-tea', '* { animation-play-state: paused !important; }'],
+    ['clarifica-perfil-tdah', '#clarifica-spotlight { position: fixed; }'],
+    ['clarifica-perfil-dislexia', 'p { letter-spacing: 0.05em !important; }']
+  ]) {
+    const estilo = document.createElement('style');
+    estilo.id = id;
+    estilo.textContent = texto;
+    document.documentElement.appendChild(estilo);
+  }
+  const spot = document.createElement('div');
+  spot.id = 'clarifica-spotlight';
+  document.body.appendChild(spot);
+  const regua = document.createElement('div');
+  regua.id = 'clarifica-regua';
+  document.body.appendChild(regua);
+  const paragrafo = document.querySelector('main p');
+  paragrafo.classList.add('clarifica-destaque-leitura');
+
+  const gifOriginal = document.createElement('img');
+  gifOriginal.setAttribute('src', 'https://exemplo.teste/animacao.gif');
+  const canvasSubstituto = document.createElement('canvas');
+  canvasSubstituto.width = 300;
+  canvasSubstituto.height = 300;
+  document.body.appendChild(canvasSubstituto);
+  canvasSubstituto.replaceWith(gifOriginal); // simula restauração: agora gifOriginal está no DOM
+  // Estado como o perfil TEA deixa: canvas no DOM, img guardada em memória.
+  document.body.appendChild(canvasSubstituto);
+  window.__clarificaGifsPerfilTea = [{ canvas: canvasSubstituto, original: gifOriginal }];
+
+  let limpezaChamada = false;
+  window.__clarificaLimpezaPerfis = () => { limpezaChamada = true; };
+  window.__clarificaIndiceBloco = 3;
+
+  window.executarAcao('reset-all');
+
+  assert.equal(document.getElementById('clarifica-perfil-tea'), null, 'estilo do TEA removido');
+  assert.equal(document.getElementById('clarifica-perfil-tdah'), null, 'estilo do TDAH removido');
+  assert.equal(document.getElementById('clarifica-perfil-dislexia'), null, 'estilo da dislexia removido');
+  assert.equal(document.getElementById('clarifica-spotlight'), null, 'holofote removido');
+  assert.equal(document.getElementById('clarifica-regua'), null, 'régua removida');
+  assert.equal(document.querySelectorAll('.clarifica-destaque-leitura').length, 0, 'destaque de leitura removido');
+  assert.equal(document.querySelector('body > img[src$="animacao.gif"]'), gifOriginal, 'GIF original restaurado no lugar do canvas');
+  assert.equal(document.querySelectorAll('canvas').length, 0, 'canvas substituto removido');
+  assert.equal(limpezaChamada, true, 'limpeza de listeners dos perfis executada');
+  assert.equal(window.__clarificaLimpezaPerfis, null, 'registro de limpeza zerado');
+  assert.equal(window.__clarificaIndiceBloco, -1, 'índice do bloco de leitura zerado');
+});
+
 test('background: resumo e imagens publicam TRIGGER_ACTION via postMessage', async () => {
   const { window } = await setup();
   const mensagens = [];

@@ -65,6 +65,14 @@ p { font-size: 0.8rem; color: var(--secundario); margin: 0 0 16px 0; }
 .mode-btn.dalton[data-mode="tritanopia"] { border-left-color: #3b82f6; }
 .mode-btn.dalton.ativo { outline: 2px solid var(--primary); outline-offset: 1px; }
 
+/* Perfis neurodivergentes (v1.2.0) — mesmas regras de destaque dos
+   filtros, com bordas laterais que diferenciam cada perfil. */
+.mode-btn.perfil { border-left: 4px solid #94a3b8; }
+.mode-btn.perfil[data-mode="tea"] { border-left-color: #8b5cf6; }
+.mode-btn.perfil[data-mode="tdah"] { border-left-color: #f59e0b; }
+.mode-btn.perfil[data-mode="dislexia"] { border-left-color: #0ea5e9; }
+.mode-btn.perfil.ativo { outline: 2px solid var(--primary); outline-offset: 1px; }
+
 .slider-row { display: flex; align-items: center; gap: 8px; margin: 8px 0 14px; }
 .slider-row label { font-size: 0.8rem; color: var(--secundario); flex: 1; }
 .slider-row input[type="range"] { flex: 1; accent-color: var(--primary); }

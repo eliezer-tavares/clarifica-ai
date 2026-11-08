@@ -42,14 +42,14 @@ async function aguardar(condicao, maxMs = 500, passo = 5) {
   while (!(await condicao()) && Date.now() - inicio < maxMs) await sleep(passo);
 }
 
-test('popup: estrutura com 8 botões nativos, slider de intensidade, status ao vivo e região de resultado', async () => {
+test('popup: estrutura com 11 botões nativos, slider de intensidade, status ao vivo e região de resultado', async () => {
   const { document } = await setup();
   const botoes = [...document.querySelectorAll('button')];
-  assert.equal(botoes.length, 8, '6 modos + fechar + tema');
+  assert.equal(botoes.length, 11, '9 modos (6 originais + 3 perfis) + fechar + tema');
   assert.ok(botoes.every((b) => b.tagName === 'BUTTON'), 'todos os controles clicáveis são <button> nativos');
   assert.ok(botoes.every((b) => b.getAttribute('tabindex') !== '-1'), 'nenhum botão fora da ordem de TAB');
   assert.ok(botoes.every((b) => b.textContent.trim().length > 0), 'todos com rótulo acessível');
-  for (const mode of ['leitura', 'resumo', 'imagens', 'protanopia', 'deuteranopia', 'tritanopia']) {
+  for (const mode of ['leitura', 'resumo', 'imagens', 'protanopia', 'deuteranopia', 'tritanopia', 'tea', 'tdah', 'dislexia']) {
     assert.ok(botao(document, mode), `botão ${mode} presente`);
   }
   const slider = document.getElementById('intensidade');
@@ -89,7 +89,13 @@ test('popup: filtro de protanopia aplica feColorMatrix no elemento raiz e anunci
   const { stub, document } = await setup();
   botao(document, 'protanopia').click();
   const anuncioBusca = () => [...document.querySelectorAll('[role="status"]')].find((n) => n.getAttribute('aria-live') === 'assertive');
-  await aguardar(() => Promise.resolve(!!anuncioBusca()));
+  // Captura atômica: o nó é congelado na avaliação em que aparece (a
+  // auto-remoção agendada não pode vencer a checagem).
+  let anuncio = null;
+  await aguardar(() => {
+    anuncio = anuncioBusca() || null;
+    return anuncio !== null;
+  });
   const filtro = document.documentElement.style.filter;
   assert.match(filtro, /feColorMatrix/, 'filtro SVG aplicado');
   assert.match(filtro, /0\.567/, 'matriz de protanopia presente');
@@ -100,7 +106,6 @@ test('popup: filtro de protanopia aplica feColorMatrix no elemento raiz e anunci
   assert.match(injecao.args[1].cssFilter, /0\.567/, 'CSS do filtro construído no popup');
   assert.equal(injecao.args[1].anuncioFiltro, 'Filtro de daltonismo Protanopia ativado.', 'anúncio já traduzido');
   assert.equal(botao(document, 'protanopia').getAttribute('aria-pressed'), 'true', 'filtro ativo marcado');
-  const anuncio = anuncioBusca();
   assert.ok(anuncio, 'anúncio assertive criado');
   assert.match(anuncio.textContent, /Protanopia/);
   await aguardar(() => Promise.resolve(!anuncio.isConnected));
@@ -140,22 +145,45 @@ test('popup: mover a intensidade e soltar reaplica o último filtro na página',
 });
 
 test('popup: trocar de filtro limpa o anterior e anuncia o novo', async () => {
-  const { document } = await setup();
+  const { stub, document } = await setup();
   const vivosAgora = () => [...document.querySelectorAll('[role="status"][aria-live="assertive"]')].filter((n) => n.isConnected);
   botao(document, 'protanopia').click();
-  await aguardar(() => Promise.resolve(vivosAgora().length === 1));
-  const anuncioAnterior = vivosAgora()[0];
-  assert.match(anuncioAnterior.textContent, /Protanopia/);
+  // Captura ATÔMICA (anúncios têm auto-remoção agendada — 3s reais, 25ms
+  // neste ambiente): o nó é congelado na mesma avaliação em que o estado
+  // "1 anúncio vivo, texto Protanopia" é observado — sem corrida.
+  let anuncioAnterior = null;
+  await aguardar(() => {
+    const vivos = vivosAgora();
+    anuncioAnterior = vivos.length === 1 ? vivos[0] : null;
+    return anuncioAnterior !== null && /Protanopia/.test(anuncioAnterior.textContent);
+  });
+  assert.ok(anuncioAnterior, 'anúncio do filtro anterior presente na página');
 
+  // Prova SÍNCRONA da limpeza: a MESMA função injetada, aplicada duas vezes
+  // em sequência (sem intervalo para temporizadores), deixa exatamente UM
+  // anúncio na página — o anterior é removido no ato da troca, e não só
+  // quando expira o temporizador de auto-remoção.
+  const injetada = stub.calls.executeScript[0].func;
+  await injetada('daltonismo-deuteranopia', { cssFilter: '', anuncioFiltro: 'Anúncio da troca (prova de limpeza)' });
+  const aposTroca = vivosAgora();
+  assert.equal(aposTroca.length, 1, 'apenas o anúncio atual permanece');
+  assert.match(aposTroca[0].textContent, /prova de limpeza/);
+  assert.ok(!anuncioAnterior.isConnected, 'anúncio do filtro anterior removido pela troca');
+
+  // Fluxo real pelo popup: clicar em deuteranopia aplica a matriz nova,
+  // descarta a anterior, marca/desmarca aria-pressed e anuncia na página
+  // (captura atômica do estado final, imune ao temporizador do ambiente).
   botao(document, 'deuteranopia').click();
-  await aguardar(() => Promise.resolve(vivosAgora().some((n) => /Deuteranopia/.test(n.textContent))));
-  await aguardar(() => Promise.resolve(!anuncioAnterior.isConnected));
+  let vivos = [];
+  await aguardar(() => {
+    vivos = vivosAgora();
+    return vivos.length === 1 && /Deuteranopia/.test(vivos[0].textContent);
+  });
   const filtro = document.documentElement.style.filter;
   assert.match(filtro, /0\.625/, 'matriz de deuteranopia aplicada');
   assert.ok(!filtro.includes('0.567'), 'matriz anterior descartada');
   assert.equal(botao(document, 'deuteranopia').getAttribute('aria-pressed'), 'true');
   assert.ok(!botao(document, 'protanopia').hasAttribute('aria-pressed'), 'filtro anterior desmarcado');
-  const vivos = vivosAgora();
   assert.equal(vivos.length, 1, 'apenas o anúncio atual permanece');
   assert.match(vivos[0].textContent, /Deuteranopia/);
 });

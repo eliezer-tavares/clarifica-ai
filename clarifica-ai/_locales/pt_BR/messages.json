@@ -39,6 +39,22 @@
   "nomeProtanopia": { "message": "Protanopia" },
   "nomeDeuteranopia": { "message": "Deuteranopia" },
   "nomeTritanopia": { "message": "Tritanopia" },
+  "secaoPerfis": { "message": "Perfis Neurodivergentes" },
+  "btnPerfilTea": { "message": "🧩 Perfil TEA — menos estímulos" },
+  "btnPerfilTdah": { "message": "🎯 Perfil TDAH — foco" },
+  "btnPerfilDislexia": { "message": "🔤 Perfil Dislexia — leitura" },
+  "statusPerfilOk": {
+    "message": "Perfil $perfil$ ativado.",
+    "placeholders": { "perfil": { "content": "$1" } }
+  },
+  "statusPerfilDesligado": { "message": "Perfil desligado." },
+  "nomePerfilTea": { "message": "TEA" },
+  "nomePerfilTdah": { "message": "TDAH" },
+  "nomePerfilDislexia": { "message": "Dislexia" },
+  "anuncioPerfilNaPagina": {
+    "message": "Clarifica.ai: Perfil $perfil$ ativado.",
+    "placeholders": { "perfil": { "content": "$1" } }
+  },
   "anuncioResumo": { "message": "Clarifica.ai: Resumindo página com inteligência artificial." },
   "anuncioLeitura": { "message": "Clarifica.ai: Modo Leitura Essencial ativado. Ruídos silenciados." },
   "anuncioImagens": { "message": "Clarifica.ai: Iniciando descrição de imagens. Aguarde." },

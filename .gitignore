@@ -9,3 +9,14 @@ Thumbs.db
 
 # Dependências instaladas na raiz (a suíte usa clarifica-ai/tests/)
 node_modules/
+
+# Cache de modelos de IA baixado pela suíte (~600 MB — NUNCA versionar;
+# o CI o recria via actions/cache + setup/preparar_modelos_ia.mjs)
+clarifica-ai/tests/.cache/
+
+# Log local de avisos do onnxruntime (fluxo documentado: npm test 2> avisos-onnx.txt)
+clarifica-ai/tests/avisos-onnx.txt
+
+# Artefatos locais do Playwright (relatório HTML e resultados dos testes E2E)
+clarifica-ai/tests/playwright-report/
+clarifica-ai/tests/e2e/resultados-teste/

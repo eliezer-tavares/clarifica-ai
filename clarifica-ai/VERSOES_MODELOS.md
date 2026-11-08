@@ -64,6 +64,8 @@ O bloco abaixo é a única fonte autorizada de versões. Ele é **lido por teste
 
 O teste `tests/versoes-modelos.test.js` lê o registry deste arquivo e confronta todos os artefatos acima (incluindo a presença e a integridade dos binários vendados). Qualquer divergência quebra o CI **antes** de uma inconsistência chegar ao usuário.
 
+> **v1.2.0 — registry inalterado, por decisão:** os Perfis Neurodivergentes (TEA, TDAH, Dislexia) foram implementados exclusivamente com CSS/DOM/JS nativos — nenhuma biblioteca nova, nenhum modelo novo, nenhuma permissão nova. Não há, portanto, nada a fixar aqui: `registry_versao` permanece 2, os SHAs dos modelos e a versão vendada da Transformers.js são exatamente os mesmos, e a chave de cache do CI segue válida. Quando a v1.3 introduzir TTS/transcrição/OCR, as novas dependências de IA entrarem por este registry (e só por ele), com o procedimento da seção 4.
+
 ## 3. Por que fixar (as quatro razões)
 
 1. **Reproducibilidade acadêmica** — a entrega do Projeto Integrador VI precisa permitir que o avaliador reproduza exatamente os resultados apresentados, mesmo meses depois.

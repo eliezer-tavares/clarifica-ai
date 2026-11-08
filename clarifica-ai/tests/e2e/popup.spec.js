@@ -66,6 +66,70 @@ for (const filtro of ['protanopia', 'deuteranopia', 'tritanopia']) {
   });
 }
 
+test('Perfil TEA (v1.2.0): pausa estímulos na página real e o segundo clique desliga', async () => {
+  const btn = navegador.popup.locator('.mode-btn[data-mode="tea"]');
+  await btn.click();
+  await expect(navegador.popup.locator('#status')).toContainText('Perfil TEA ativado');
+
+  const estado = await pagina.evaluate(() => {
+    const estilo = document.getElementById('clarifica-perfil-tea');
+    return {
+      estiloPresente: !!estilo,
+      pausaAnimacoes: (estilo?.textContent || '').includes('animation-play-state'),
+      anuncio: [...document.querySelectorAll('[role="status"]')].some((n) => /Perfil TEA ativado/.test(n.textContent || ''))
+    };
+  });
+  expect(estado.estiloPresente).toBe(true);
+  expect(estado.pausaAnimacoes).toBe(true);
+  expect(estado.anuncio).toBe(true);
+
+  // Toggle: clicar de novo desliga e restaura a página.
+  await btn.click();
+  await expect(navegador.popup.locator('#status')).toHaveText('Perfil desligado.');
+  const limpo = await pagina.evaluate(() => !!document.getElementById('clarifica-perfil-tea'));
+  expect(limpo).toBe(false);
+});
+
+test('Perfil Dislexia (v1.2.0): aplica tipografia de leitura e cria a régua na página real', async () => {
+  const btn = navegador.popup.locator('.mode-btn[data-mode="dislexia"]');
+  await btn.click();
+  await expect(navegador.popup.locator('#status')).toContainText('Perfil Dislexia ativado');
+
+  const estado = await pagina.evaluate(() => {
+    const estilo = document.getElementById('clarifica-perfil-dislexia');
+    return {
+      espacamento: (estilo?.textContent || '').includes('letter-spacing'),
+      entrelinha: (estilo?.textContent || '').includes('line-height'),
+      fonteLeitura: (estilo?.textContent || '').includes('Verdana'),
+      monoespacadasPreservadas: (estilo?.textContent || '').includes('monospace'),
+      regua: !!document.getElementById('clarifica-regua')
+    };
+  });
+  expect(estado.espacamento).toBe(true);
+  expect(estado.entrelinha).toBe(true);
+  expect(estado.fonteLeitura).toBe(true);
+  expect(estado.monoespacadasPreservadas).toBe(true);
+  expect(estado.regua).toBe(true);
+
+  // A régua precisa SER VISÍVEL de verdade: um div sem regra CSS existe,
+  // mas nasce com dimensão zero (bug corrigido na revisão 6). A prova no
+  // Chromium real é o computed style — posição fixa, 48 px e sem capturar
+  // o mouse.
+  const reguaVisivel = await pagina.evaluate(() => {
+    const r = document.getElementById('clarifica-regua');
+    if (!r) return null;
+    const cs = getComputedStyle(r);
+    return { posicao: cs.position, altura: cs.height, eventos: cs.pointerEvents };
+  });
+  expect(reguaVisivel).toEqual({ posicao: 'fixed', altura: '48px', eventos: 'none' });
+
+  // Trocar para outro recurso não limpa o perfil — mas o atalho de restauração sim.
+  await navegador.popup.locator('.mode-btn[data-mode="tritanopia"]').click();
+  await expect(navegador.popup.locator('#status')).toContainText('Filtro de daltonismo ativado');
+  const reguaAposFiltro = await pagina.evaluate(() => !!document.getElementById('clarifica-regua'));
+  expect(reguaAposFiltro).toBe(true);
+});
+
 test('resumo com texto insuficiente: caminho de erro real informa o usuário no popup', async () => {
   const curta = await navegador.abrirPaginaDeTeste(`${servidor.url}/pagina-curta`);
   await navegador.popup.locator('.mode-btn[data-mode="resumo"]').click();
