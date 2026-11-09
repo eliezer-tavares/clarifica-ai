@@ -73,6 +73,15 @@ p { font-size: 0.8rem; color: var(--secundario); margin: 0 0 16px 0; }
 .mode-btn.perfil[data-mode="dislexia"] { border-left-color: #0ea5e9; }
 .mode-btn.perfil.ativo { outline: 2px solid var(--primary); outline-offset: 1px; }
 
+/* Áudio e Multimodal (v1.3.0) — mesma gramática visual dos perfis.
+   O botão de voz recebe .ativo quando a página está falando (toggle). */
+.mode-btn.midia { border-left: 4px solid #94a3b8; }
+.mode-btn.midia[data-mode="transcrever"] { border-left-color: #14b8a6; }
+.mode-btn.midia[data-mode="ocr"] { border-left-color: #f97316; }
+.mode-btn.midia[data-mode="traduzir"] { border-left-color: #6366f1; }
+.mode-btn.midia[data-mode="voz"] { border-left-color: #ec4899; }
+.mode-btn.midia.ativo { outline: 2px solid var(--primary); outline-offset: 1px; }
+
 .slider-row { display: flex; align-items: center; gap: 8px; margin: 8px 0 14px; }
 .slider-row label { font-size: 0.8rem; color: var(--secundario); flex: 1; }
 .slider-row input[type="range"] { flex: 1; accent-color: var(--primary); }

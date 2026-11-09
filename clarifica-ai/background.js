@@ -10,14 +10,19 @@ const commandActions = {
   'toggle-resumo': 'summarize',
   'toggle-leitura': 'apply-leitura-essencial',
   'toggle-imagens': 'describe-images',
-  'toggle-reset': 'reset-all'
+  'toggle-reset': 'reset-all',
+  // v1.3.0: sem suggested_key — o Chrome aceita no máximo 4 atalhos
+  // sugeridos por extensão; este fica configurável pelo usuário em
+  // chrome://extensions/shortcuts (documentado no README).
+  'traduzir-selecao': 'translate-selection'
 };
 
 const MENSAGENS_LEITOR = {
   'summarize': 'anuncioResumo',
   'apply-leitura-essencial': 'anuncioLeitura',
   'describe-images': 'anuncioImagens',
-  'reset-all': 'anuncioReset'
+  'reset-all': 'anuncioReset',
+  'translate-selection': 'anuncioTraducao'
 };
 
 // ---- Motor de mensagens (v1.1.0) — ver comentário completo em popup.js ----
@@ -152,6 +157,13 @@ function executarAcao(acao) {
     document.getElementById('clarifica-style')?.remove();
     document.getElementById('clarifica-resumo')?.remove();
     document.documentElement.style.filter = ''; // Limpa filtros de daltonismo
+    // Leitura em voz alta (v1.3.0): interrompe a fala em curso na página —
+    // a síntese vive na PÁGINA (Web Speech API), então o reset a alcança.
+    try {
+      if (window.speechSynthesis && typeof window.speechSynthesis.cancel === 'function') {
+        window.speechSynthesis.cancel();
+      }
+    } catch (e) { /* API ausente (navegador/ambiente sem TTS) */ }
     document.querySelectorAll('[aria-hidden="true"]').forEach(el => {
       el.removeAttribute('aria-hidden');
       el.removeAttribute('inert');
@@ -181,7 +193,7 @@ function executarAcao(acao) {
     window.__clarificaLimpezaPerfis = null;
     window.__clarificaIndiceBloco = -1;
   }
-  else if (acao === 'summarize' || acao === 'describe-images') {
+  else if (acao === 'summarize' || acao === 'describe-images' || acao === 'translate-selection') {
     window.postMessage({ type: 'TRIGGER_ACTION', action: acao }, '*');
   }
 }

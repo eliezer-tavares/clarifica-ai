@@ -1,4 +1,4 @@
-// Consistência do registry de versões (VERSOES_MODELOS.md) — v1.1.0.
+// Consistência do registry de versões (VERSOES_MODELOS.md) — v1.3.0.
 //
 // Desde a v1.1.0 a biblioteca Transformers.js NÃO vem de CDN: o bundle
 // oficial da versão fixada é VENDADO em vendor/ (com os binários WASM do
@@ -25,8 +25,8 @@ const registry = (() => {
   return JSON.parse(bloco[1]);
 })();
 
-test('registry v2 declara a biblioteca vendada e os dois modelos com revisão (SHA) fixada', () => {
-  assert.equal(registry.registry_versao, 2);
+test('registry v3 declara a biblioteca vendada e os cinco modelos com revisão (SHA) fixada', () => {
+  assert.equal(registry.registry_versao, 3);
   assert.match(registry.transformers_js.versao, /^\d+\.\d+\.\d+$/, 'versão semântica da biblioteca');
   assert.equal(registry.transformers_js.origem, 'pacote vendado (sem CDN)');
   assert.equal(registry.transformers_js.arquivo_local, 'vendor/transformers.min.js');
@@ -37,8 +37,18 @@ test('registry v2 declara a biblioteca vendada e os dois modelos com revisão (S
     assert.match(modelo.id, /^[^/]+\/[^/]+$/, `${nome}: id repositório/arquivo`);
     assert.match(modelo.revisao, /^[0-9a-f]{40}$/, `${nome}: revisão é o SHA completo do commit`);
     assert.ok(modelo.tamanho_aproximado, `${nome}: tamanho declarado`);
+    assert.ok(modelo.tarefa, `${nome}: tarefa declarada`);
   }
-  assert.ok(registry.modelos.sumarizacao && registry.modelos.visao, 'registry cobre os dois modelos do produto');
+  assert.ok(registry.modelos.sumarizacao && registry.modelos.visao, 'registry cobre os dois modelos originais');
+  assert.ok(registry.modelos.transcricao && registry.modelos.ocr && registry.modelos.traducao,
+    'registry cobre os três modelos novos da v1.3.0 (transcrição, OCR, tradução)');
+});
+
+test('registry v3 declara a TTS como Web Speech API — vozes do sistema, sem modelo nem download', () => {
+  assert.ok(registry.tts, 'registro de TTS presente fora do bloco de modelos');
+  assert.match(registry.tts.tecnologia, /Web Speech API/);
+  assert.match(registry.tts.origem, /sistema/i);
+  assert.ok(!registry.modelos.tts, 'TTS NÃO é um modelo do Hugging Face — decisão de produto documentada');
 });
 
 test('ai-worker.js carrega a biblioteca pela URL injetada (ZERO CDN) e as revisões do registry', () => {

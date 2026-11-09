@@ -59,5 +59,35 @@
   "anuncioLeitura": { "message": "Clarifica.ai: Essential Reading Mode activated. Noise silenced." },
   "anuncioImagens": { "message": "Clarifica.ai: Starting image description. Please wait." },
   "anuncioReset": { "message": "Clarifica.ai: Deactivated. Page restored to the original." },
-  "anuncioGenerico": { "message": "Clarifica.ai activated." }
+  "anuncioGenerico": { "message": "Clarifica.ai activated." },
+  "secaoAudio": { "message": "Audio and Multimodal" },
+  "btnTranscreverAudio": { "message": "🎙️ Transcribe Page Audio" },
+  "btnOcr": { "message": "📄 OCR — Text in Images" },
+  "btnTraduzir": { "message": "🌍 Translate Selection (EN → PT)" },
+  "btnLerVozAlta": { "message": "🔊 Read Aloud" },
+  "statusTranscricaoOk": { "message": "Transcription done!" },
+  "statusOcrIniciando": {
+    "message": "Extracting text from $quantidade$ images...",
+    "placeholders": { "quantidade": { "content": "$1" } }
+  },
+  "statusTraducaoOk": { "message": "Translation done!" },
+  "statusLendoVozAlta": { "message": "Reading aloud. Click again to stop." },
+  "statusVozParada": { "message": "Read aloud stopped." },
+  "statusSemAudio": { "message": "No video or audio found on the page." },
+  "statusAudioIndisponivel": { "message": "Could not access the page audio." },
+  "statusMediaBloqueado": { "message": "The audio is protected by the site (CORS) and cannot be transcribed." },
+  "statusAudioCurto": { "message": "The audio is too short to transcribe." },
+  "statusErroAudio": { "message": "Audio transcription failed." },
+  "statusErroOcr": { "message": "Image OCR failed." },
+  "statusErroTraducao": { "message": "Translation failed." },
+  "statusSelecaoVazia": { "message": "Select a passage on the page before translating." },
+  "statusTtsIndisponivel": { "message": "Read aloud unavailable in this browser." },
+  "statusSemTextoVoz": { "message": "Nothing to read: page has no text." },
+  "prefixoOcrIA": { "message": "Image text (OCR): " },
+  "anuncioOcrNaPagina": {
+    "message": "OCR finished for $quantidade$ images.",
+    "placeholders": { "quantidade": { "content": "$1" } }
+  },
+  "anuncioTraducaoConcluida": { "message": "Clarifica.ai: Translation finished." },
+  "anuncioTraducao": { "message": "Clarifica.ai: Translating the selected passage." }
 }

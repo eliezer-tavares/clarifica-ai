@@ -231,7 +231,19 @@ document.addEventListener('DOMContentLoaded', () => {
     'erro-resumo': 'statusErroProcessamento',
     'erro-imagem': 'statusErroImagem',
     'falha-worker': 'statusFalhaIA',
-    'falha-injecao': 'statusInjecaoErro'
+    'falha-injecao': 'statusInjecaoErro',
+    // Áudio e Multimodal (v1.3.0): códigos da página (descoberta de mídia,
+    // CORS, seleção, TTS) e códigos do worker (falha de inferência).
+    'sem-audio': 'statusSemAudio',
+    'audio-indisponivel': 'statusAudioIndisponivel',
+    'media-bloqueado': 'statusMediaBloqueado',
+    'audio-muito-curto': 'statusAudioCurto',
+    'erro-audio': 'statusErroAudio',
+    'erro-ocr': 'statusErroOcr',
+    'erro-traducao': 'statusErroTraducao',
+    'selecao-vazia': 'statusSelecaoVazia',
+    'tts-indisponivel': 'statusTtsIndisponivel',
+    'sem-texto-voz': 'statusSemTextoVoz'
   };
   const CICLO_TEMA = ['auto', 'claro', 'escuro'];
 
@@ -290,6 +302,16 @@ document.addEventListener('DOMContentLoaded', () => {
       statusEl.textContent = (r && r.error) ? textoDeErro(r.error) : mensagem('statusInjecaoErro');
       destacarPerfil(null);
     }
+  }
+
+  // ---- Áudio e Multimodal (v1.3.0) ----
+  // O botão de leitura em voz alta é um TOGGLE: aria-pressed reflete o
+  // estado real de fala devolvido pela página (WCAG 4.1.2).
+  function marcarVoz(falando) {
+    const btn = document.querySelector('.mode-btn[data-mode="voz"]');
+    if (!btn) return;
+    btn.classList.toggle('ativo', !!falando);
+    btn.setAttribute('aria-pressed', falando ? 'true' : 'false');
   }
 
   async function desligarPerfil() {
@@ -396,6 +418,59 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         else statusEl.textContent = mensagem('statusSemResposta');
       }
+      else if (mode === 'transcrever') {
+        const resultado = await enviarParaContent('transcribe-audio');
+        if (resultado?.error) statusEl.textContent = textoDeErro(resultado.error);
+        else if (typeof resultado?.transcript === 'string' && resultado.transcript.trim().length > 0) {
+          statusEl.textContent = mensagem('statusTranscricaoOk');
+          aiOutput.textContent = resultado.transcript.trim();
+          resultArea.classList.remove('hidden');
+        }
+        else statusEl.textContent = mensagem('statusSemResposta');
+      }
+      else if (mode === 'ocr') {
+        // O modelo de anúncio de conclusão vai pronto (traduzido no popup)
+        // porque a página não tem chrome.i18n; o $quantidade$ é substituído
+        // pela página, única que conhece a contagem real de imagens.
+        const resultado = await enviarParaContent('ocr-imagens', {
+          prefixoOcrIA: mensagem('prefixoOcrIA'),
+          anuncioOcr: mensagem('anuncioOcrNaPagina')
+        });
+        if (resultado?.error) statusEl.textContent = textoDeErro(resultado.error);
+        else if (typeof resultado?.totalSemAlt === 'number') {
+          statusEl.textContent = resultado.totalSemAlt === 0
+            ? mensagem('statusImagensCompletas')
+            : mensagem('statusOcrIniciando', [String(resultado.totalSemAlt)]);
+        }
+        else statusEl.textContent = mensagem('statusSemResposta');
+      }
+      else if (mode === 'traduzir') {
+        const resultado = await enviarParaContent('traduzir-selecao', {
+          anuncioTraducao: mensagem('anuncioTraducaoConcluida')
+        });
+        if (resultado?.error) statusEl.textContent = textoDeErro(resultado.error);
+        else if (typeof resultado?.translation === 'string' && resultado.translation.trim().length > 0) {
+          statusEl.textContent = mensagem('statusTraducaoOk');
+          aiOutput.textContent = resultado.translation.trim();
+          resultArea.classList.remove('hidden');
+        }
+        else statusEl.textContent = mensagem('statusSemResposta');
+      }
+      else if (mode === 'voz') {
+        const resultado = await enviarParaContent('ler-voz-alta', {
+          // A voz acompanha o idioma da interface (pt-BR ou en-US).
+          idiomaVoz: localeResolvido === 'pt_BR' ? 'pt-BR' : 'en-US'
+        });
+        if (resultado?.error) {
+          statusEl.textContent = textoDeErro(resultado.error);
+          marcarVoz(false);
+        }
+        else if (typeof resultado?.falando === 'boolean') {
+          statusEl.textContent = resultado.falando ? mensagem('statusLendoVozAlta') : mensagem('statusVozParada');
+          marcarVoz(resultado.falando);
+        }
+        else statusEl.textContent = mensagem('statusSemResposta');
+      }
       else if (TIPOS_FILTRO.includes(mode)) {
         await aplicarFiltro(mode);
       }
@@ -435,6 +510,31 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function manipularPagina(acao, extras = null) {
+    // === INÍCIO DA LÓGICA PURA DE ÁUDIO (v1.3.0: exercitada em Node por
+    // multimodal.test.js — extração por marcadores, sem DOM nem chrome.*) ===
+    // O Whisper exige PCM mono a 16 kHz. O áudio da página chega decodificado
+    // (decodeAudioData) na taxa original do arquivo; a reamostragem linear
+    // aqui é determinística e testável em Node.
+    function reamostrarPara16k(amostras, taxaOrigem) {
+      const entrada = amostras instanceof Float32Array ? amostras : Float32Array.from(amostras || []);
+      const taxa = Number(taxaOrigem) || 0;
+      if (entrada.length === 0 || taxa <= 0) return new Float32Array(0);
+      if (taxa === 16000) return entrada;
+      const total = Math.max(1, Math.round((entrada.length / taxa) * 16000));
+      const saida = new Float32Array(total);
+      for (let i = 0; i < total; i++) {
+        // Interpolação linear entre as amostras vizinhas; as pontas
+        // (primeira e última amostra) são preservadas exatamente.
+        const posicao = total === 1 ? 0 : (i * (entrada.length - 1)) / (total - 1);
+        const base = Math.floor(posicao);
+        const resto = posicao - base;
+        const vizinho = Math.min(entrada.length - 1, base + 1);
+        saida[i] = entrada[base] * (1 - resto) + entrada[vizinho] * resto;
+      }
+      return saida;
+    }
+    // === FIM DA LÓGICA PURA DE ÁUDIO ===
+
     // ---- Perfis neurodivergentes (v1.2.0) — helpers da PÁGINA ----
     // IMPORTANTE: tudo abaixo vive DENTRO de manipularPagina porque o
     // Chrome serializa apenas o corpo desta função na injeção.
@@ -727,6 +827,174 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       return { totalSemAlt: imagens.length };
+    }
+
+    if (acao === 'transcribe-audio') {
+      // Um único caminho para vídeo e podcast: o primeiro elemento <video>/
+      // <audio> com src http(s). blob: (ex.: YouTube) e data: não são
+      // fetcháveis — são ignorados sem quebrar o fluxo.
+      const src = Array.from(document.querySelectorAll('video, audio'))
+        .map((m) => m.currentSrc || m.getAttribute('src') || (m.querySelector('source') || {}).src || '')
+        .find((s) => /^https?:\/\//i.test(s));
+      if (!src) return { error: 'sem-audio' };
+
+      // Teto de 120 s de áudio 16 kHz (~7,7 MB de PCM): Whisper-tiny custa
+      // segundos por janela de 30 s — podcasts longos transcrevem o trecho
+      // inicial (limitação documentada no README).
+      const TETO_16K = 16000 * 120;
+
+      try {
+        const resposta = await fetch(src);
+        if (!resposta.ok) return { error: 'audio-indisponivel' };
+        const buffer = await resposta.arrayBuffer();
+        const ContextoAudio = window.AudioContext || window.webkitAudioContext;
+        if (typeof ContextoAudio !== 'function') return { error: 'audio-indisponivel' };
+        const contexto = new ContextoAudio();
+        const decodificado = await contexto.decodeAudioData(buffer);
+        try { contexto.close && contexto.close(); } catch (e) { /* já fechado */ }
+        const canal = decodificado.getChannelData(0);
+        const pcm = reamostrarPara16k(canal, decodificado.sampleRate);
+        const limitado = pcm.length > TETO_16K ? pcm.subarray(0, TETO_16K) : pcm;
+        if (limitado.length < 16000) return { error: 'audio-muito-curto' }; // menos de 1 s
+
+        const { worker, urlBlob } = await criarWorkerIA();
+        const encerrar = () => { worker.terminate(); URL.revokeObjectURL(urlBlob); };
+        return await new Promise((resolve) => {
+          worker.postMessage({ type: 'transcribe-audio', data: limitado });
+          worker.onmessage = (e) => {
+            if (e.data.type === 'transcription') {
+              encerrar();
+              resolve({ transcript: e.data.transcript });
+            } else if (e.data.type === 'error') {
+              encerrar();
+              resolve({ error: e.data.error || 'erro-audio' });
+            }
+          };
+          worker.onerror = () => { encerrar(); resolve({ error: 'falha-worker' }); };
+        });
+      } catch (e) {
+        // fetch e decodeAudioData falham (com exceção silenciosa) em mídia
+        // cross-origin sem CORS — o usuário recebe uma mensagem clara.
+        return { error: 'media-bloqueado' };
+      }
+    }
+
+    if (acao === 'ocr-imagens') {
+      // Mesma descoberta da descrição de imagens: sem alt, alt vazio ou o
+      // genérico "image". O texto impresso extraído vira alt/aria-label da
+      // imagem (WCAG 1.4.5 — imagens de texto exigem alternativa textual).
+      const imagens = Array.from(document.querySelectorAll('img')).filter(img => {
+        const alt = img.getAttribute('alt');
+        return !alt || alt.trim() === '' || alt === 'image';
+      });
+
+      if (imagens.length === 0) return { totalSemAlt: 0 };
+
+      let worker, urlBlob;
+      try {
+        ({ worker, urlBlob } = await criarWorkerIA());
+      } catch (e) {
+        return { error: 'falha-worker' };
+      }
+
+      const prefixoOcr = (extras && extras.prefixoOcrIA) || '';
+      let respondidas = 0;
+
+      worker.onmessage = (e) => {
+        if (e.data.type === 'ocr-text') {
+          respondidas++;
+          const img = imagens.find(i => i.src === e.data.imageUrl);
+          const texto = String(e.data.text || '').trim();
+          if (img && texto) {
+            img.setAttribute('alt', `${prefixoOcr}${texto}`);
+            img.setAttribute('aria-label', `${prefixoOcr}${texto}`);
+            img.style.border = '2px solid #10b981';
+          }
+          if (respondidas === imagens.length) {
+            // Todas as imagens responderam (com texto ou vazias): anuncia
+            // e encerra — contagem por RESPOSTAS, não por textos úteis,
+            // para nunca deixar Worker zumbi quando o OCR vier vazio.
+            const modelo = (extras && extras.anuncioOcr) || 'OCR concluído em $quantidade$ imagens.';
+            anunciarNaPagina(modelo.replace('$quantidade$', String(imagens.length)));
+            worker.terminate();
+            URL.revokeObjectURL(urlBlob);
+          }
+        } else if (e.data.type === 'error') {
+          // Falha do worker: encerra com limpeza (sem Worker zumbi).
+          worker.terminate();
+          URL.revokeObjectURL(urlBlob);
+        }
+      };
+
+      imagens.forEach((img, i) => {
+        setTimeout(() => worker.postMessage({ type: 'ocr-image', data: img.src }), i * 500);
+      });
+
+      return { totalSemAlt: imagens.length };
+    }
+
+    if (acao === 'traduzir-selecao') {
+      const selecao = ((window.getSelection && typeof window.getSelection().toString === 'function')
+        ? window.getSelection().toString()
+        : '').trim();
+      if (!selecao) return { error: 'selecao-vazia' };
+
+      try {
+        const { worker, urlBlob } = await criarWorkerIA();
+        const encerrar = () => { worker.terminate(); URL.revokeObjectURL(urlBlob); };
+        return await new Promise((resolve) => {
+          // Teto de 1500 caracteres: "tradução instantânea" de trechos —
+          // passagens longas custariam minutos em hardware modesto.
+          worker.postMessage({ type: 'translate-text', data: selecao.slice(0, 1500) });
+          worker.onmessage = (e) => {
+            if (e.data.type === 'translation') {
+              encerrar();
+              anunciarNaPagina((extras && extras.anuncioTraducao) || '');
+              resolve({ translation: e.data.translation });
+            } else if (e.data.type === 'error') {
+              encerrar();
+              resolve({ error: e.data.error || 'erro-traducao' });
+            }
+          };
+          worker.onerror = () => { encerrar(); resolve({ error: 'falha-worker' }); };
+        });
+      } catch (e) {
+        return { error: 'falha-worker' };
+      }
+    }
+
+    if (acao === 'ler-voz-alta') {
+      // TTS na PÁGINA (Web Speech API, vozes do sistema — sem modelo e sem
+      // download): a fala sobrevive ao fechamento do popup e o Ctrl+Shift+X
+      // também a interrompe (reset-all cancela). Toggle: se está falando,
+      // o mesmo clique para.
+      if (!('speechSynthesis' in window) || typeof window.SpeechSynthesisUtterance !== 'function') {
+        return { error: 'tts-indisponivel' };
+      }
+      const sintese = window.speechSynthesis;
+      if (sintese.speaking || sintese.pending) {
+        sintese.cancel();
+        return { success: true, falando: false };
+      }
+      let texto = ((window.getSelection && typeof window.getSelection().toString === 'function')
+        ? window.getSelection().toString()
+        : '').trim();
+      if (!texto) texto = (document.querySelector('main, article, #content') || document.body).innerText || '';
+      texto = texto.trim().slice(0, 8000);
+      if (!texto) return { error: 'sem-texto-voz' };
+      const utterance = new window.SpeechSynthesisUtterance(texto);
+      const idiomaVoz = (extras && extras.idiomaVoz) || '';
+      if (idiomaVoz) {
+        utterance.lang = idiomaVoz;
+        try {
+          const voz = (typeof sintese.getVoices === 'function' ? sintese.getVoices() : [])
+            .find((v) => v.lang && String(v.lang).toLowerCase().startsWith(idiomaVoz.toLowerCase()));
+          if (voz) utterance.voice = voz;
+        } catch (e) { /* getVoices indisponível: segue a voz padrão */ }
+      }
+      sintese.cancel(); // descarta qualquer fila anterior antes de falar
+      sintese.speak(utterance);
+      return { success: true, falando: true, caracteres: texto.length };
     }
   }
 });

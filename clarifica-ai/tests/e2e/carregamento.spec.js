@@ -28,10 +28,10 @@ test('manifest aceito pelo Chrome real: service worker MV3 registrado', async ()
   expect(url).toMatch(/\/background\.js$/);
 });
 
-test('popup abre como página real: 9 botões, barra de status aria-live e zero erros de console', async () => {
+test('popup abre como página real: 13 botões, barra de status aria-live e zero erros de console', async () => {
   const { popup } = navegador;
 
-  await expect(popup.locator('.mode-btn')).toHaveCount(9);
+  await expect(popup.locator('.mode-btn')).toHaveCount(13);
 
   const status = popup.locator('#status');
   await expect(status).toHaveAttribute('role', 'status');
@@ -50,6 +50,13 @@ test('popup abre como página real: 9 botões, barra de status aria-live e zero 
   expect(rotulos.some((t) => /Perfil TEA/.test(t))).toBe(true);
   expect(rotulos.some((t) => /Perfil TDAH/.test(t))).toBe(true);
   expect(rotulos.some((t) => /Perfil Dislexia/.test(t))).toBe(true);
+
+  // Novidades da v1.3.0 — Áudio e Multimodal — presentes no popup real.
+  expect(rotulos.some((t) => /Transcrever Áudio/.test(t))).toBe(true);
+  expect(rotulos.some((t) => /OCR/.test(t))).toBe(true);
+  expect(rotulos.some((t) => /Traduzir Seleção/.test(t))).toBe(true);
+  expect(rotulos.some((t) => /Ler em Voz Alta/.test(t))).toBe(true);
+  await expect(popup.locator('.mode-btn[data-mode="voz"]')).toHaveAttribute('aria-pressed', 'false');
 
   // Novidades da v1.1 presentes no popup real: slider de intensidade e
   // botão de tema (rotulado, i18n pt-BR aplicado pelo Chrome).

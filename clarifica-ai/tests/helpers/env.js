@@ -180,10 +180,32 @@ class FakeWorker {
       setTimeout(() => this.onmessage && this.onmessage({ data: { type: 'error', error: 'erro-imagem' } }), 5);
       return;
     }
+    if (FakeWorker.mode === 'worker-audio-erro') {
+      setTimeout(() => this.onmessage && this.onmessage({ data: { type: 'error', error: 'erro-audio' } }), 5);
+      return;
+    }
+    if (FakeWorker.mode === 'worker-ocr-erro') {
+      setTimeout(() => this.onmessage && this.onmessage({ data: { type: 'error', error: 'erro-ocr' } }), 5);
+      return;
+    }
+    if (FakeWorker.mode === 'worker-traducao-erro') {
+      setTimeout(() => this.onmessage && this.onmessage({ data: { type: 'error', error: 'erro-traducao' } }), 5);
+      return;
+    }
     if (msg.type === 'summarize') {
       setTimeout(() => this.onmessage && this.onmessage({ data: { status: 'success', summary: 'RESUMO-TESTE' } }), 5);
     } else if (msg.type === 'describe-image') {
       setTimeout(() => this.onmessage && this.onmessage({ data: { type: 'image-description', description: 'DESC-' + msg.data, imageUrl: msg.data } }), 5);
+    } else if (msg.type === 'transcribe-audio') {
+      // Mesma sequência REAL do worker (v1.3.0): progresso de status antes
+      // do resultado final — trava regressões que resolvessem na 1ª mensagem.
+      setTimeout(() => this.onmessage && this.onmessage({ data: { type: 'status', message: 'Transcrevendo áudio...' } }), 5);
+      setTimeout(() => this.onmessage && this.onmessage({ data: { type: 'transcription', transcript: 'TRANSCRICAO-TESTE' } }), 15);
+    } else if (msg.type === 'ocr-image') {
+      setTimeout(() => this.onmessage && this.onmessage({ data: { type: 'ocr-text', text: 'OCR-' + msg.data, imageUrl: msg.data } }), 5);
+    } else if (msg.type === 'translate-text') {
+      setTimeout(() => this.onmessage && this.onmessage({ data: { type: 'status', message: 'Traduzindo...' } }), 5);
+      setTimeout(() => this.onmessage && this.onmessage({ data: { type: 'translation', translation: 'TRADUCAO-TESTE' } }), 15);
     }
   }
   terminate() { this.terminated = true; }

@@ -206,6 +206,28 @@ test('background: resumo e imagens publicam TRIGGER_ACTION via postMessage', asy
   ]);
 });
 
+test('background: comando de tradução (v1.3.0) dispara anúncio i18n + TRIGGER_ACTION', async () => {
+  const { stub, window } = await setup();
+  const mensagens = [];
+  window.addEventListener('message', (e) => mensagens.push(e.data));
+  const listener = stub.calls.commands[0];
+  await listener('traduzir-selecao');
+  await sleep(10);
+  assert.equal(stub.calls.executeScript.length, 2, 'anúncio + ação (2 injeções, como nos demais comandos)');
+  assert.equal(stub.calls.executeScript[0].args[0], 'translate-selection');
+  assert.equal(stub.calls.executeScript[0].args[1], mensagemPT('anuncioTraducao'), 'mensagem resolvida no service worker');
+  const normalizadas = mensagens.map((m) => ({ type: m.type, action: m.action }));
+  assert.deepEqual(normalizadas, [{ type: 'TRIGGER_ACTION', action: 'translate-selection' }]);
+});
+
+test('background: reset-all interrompe a leitura em voz alta da página (v1.3.0)', async () => {
+  const { window } = await setup();
+  let cancelamentos = 0;
+  window.speechSynthesis = { cancel: () => { cancelamentos++; } };
+  window.executarAcao('reset-all');
+  assert.equal(cancelamentos, 1, 'speechSynthesis.cancel chamado pelo reset');
+});
+
 test('background: ações de leitura/reset NÃO publicam postMessage', async () => {
   const { window } = await setup();
   const mensagens = [];

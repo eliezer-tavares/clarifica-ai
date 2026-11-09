@@ -137,6 +137,18 @@ test('resumo com texto insuficiente: caminho de erro real informa o usuário no 
   await curta.pagina.close();
 });
 
+test('tradução (v1.3.0): sem seleção na página, o erro é claro e nenhum modelo carrega', async () => {
+  // Re-aponta o alvo do popup para a página com artigo (o override da
+  // página curta do teste anterior venceria por ser o último da pilha —
+  // e aquela aba já foi fechada). O caminho de erro roda DENTRO da página
+  // real (getSelection vazio) — determinístico e sem inferência.
+  const { pagina } = await navegador.abrirPaginaDeTeste(`${servidor.url}/artigo`);
+  await navegador.popup.locator('.mode-btn[data-mode="traduzir"]').click();
+  await expect(navegador.popup.locator('#status')).toHaveText('Selecione um trecho na página antes de traduzir.');
+  await expect(navegador.popup.locator('#result-area')).toBeHidden();
+  await pagina.close();
+});
+
 // Teste de IA REAL dentro do E2E (opt-in): o worker real baixa o modelo
 // (ou usa o cache do perfil) e produz um resumo de verdade dentro do
 // navegador. Pesado (~300 MB na primeira vez) — ativado com

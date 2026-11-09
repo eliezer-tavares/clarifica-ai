@@ -59,5 +59,35 @@
   "anuncioLeitura": { "message": "Clarifica.ai: Modo Leitura Essencial ativado. Ruídos silenciados." },
   "anuncioImagens": { "message": "Clarifica.ai: Iniciando descrição de imagens. Aguarde." },
   "anuncioReset": { "message": "Clarifica.ai: Desativado. Página restaurada ao original." },
-  "anuncioGenerico": { "message": "Clarifica.ai ativado." }
+  "anuncioGenerico": { "message": "Clarifica.ai ativado." },
+  "secaoAudio": { "message": "Áudio e Multimodal" },
+  "btnTranscreverAudio": { "message": "🎙️ Transcrever Áudio da Página" },
+  "btnOcr": { "message": "📄 OCR — Texto nas Imagens" },
+  "btnTraduzir": { "message": "🌍 Traduzir Seleção (EN → PT)" },
+  "btnLerVozAlta": { "message": "🔊 Ler em Voz Alta" },
+  "statusTranscricaoOk": { "message": "Transcrição concluída!" },
+  "statusOcrIniciando": {
+    "message": "Extraindo texto de $quantidade$ imagens...",
+    "placeholders": { "quantidade": { "content": "$1" } }
+  },
+  "statusTraducaoOk": { "message": "Tradução concluída!" },
+  "statusLendoVozAlta": { "message": "Lendo em voz alta. Clique de novo para parar." },
+  "statusVozParada": { "message": "Leitura em voz alta parada." },
+  "statusSemAudio": { "message": "Nenhum vídeo ou áudio encontrado na página." },
+  "statusAudioIndisponivel": { "message": "Não foi possível acessar o áudio da página." },
+  "statusMediaBloqueado": { "message": "O áudio é protegido pelo site (CORS) e não pode ser transcrito." },
+  "statusAudioCurto": { "message": "O áudio é muito curto para transcrever." },
+  "statusErroAudio": { "message": "Falha na transcrição de áudio." },
+  "statusErroOcr": { "message": "Falha no OCR das imagens." },
+  "statusErroTraducao": { "message": "Falha na tradução." },
+  "statusSelecaoVazia": { "message": "Selecione um trecho na página antes de traduzir." },
+  "statusTtsIndisponivel": { "message": "Leitura em voz alta indisponível neste navegador." },
+  "statusSemTextoVoz": { "message": "Nada para ler: página sem texto." },
+  "prefixoOcrIA": { "message": "Texto da imagem (OCR): " },
+  "anuncioOcrNaPagina": {
+    "message": "OCR concluído em $quantidade$ imagens.",
+    "placeholders": { "quantidade": { "content": "$1" } }
+  },
+  "anuncioTraducaoConcluida": { "message": "Clarifica.ai: Tradução concluída." },
+  "anuncioTraducao": { "message": "Clarifica.ai: Traduzindo o trecho selecionado." }
 }

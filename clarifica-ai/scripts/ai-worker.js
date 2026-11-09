@@ -16,6 +16,16 @@
 // trocado pelo pacote npm @xenova/transformers na MESMA versão fixada, e o
 // segundo permanece intacto (em Node a inferência usa o ONNX Runtime
 // nativo, sem WASM). O código nunca roda com os placeholders originais.
+//
+// Tarefas (v1.3.0 — Áudio e Multimodal, registry_versao 3):
+//   summarize        → sumarização (distilbart-cnn-12-6)      [desde v1.0.0]
+//   describe-image   → descrição de imagens (vit-gpt2)         [desde v1.0.0]
+//   transcribe-audio → transcrição (whisper-tiny, 16 kHz mono) [v1.3.0]
+//   ocr-image        → OCR de texto impresso (trocr-small)     [v1.3.0]
+//   translate-text   → tradução EN→PT (opus-mt-en-ROMANCE)     [v1.3.0]
+// A leitura em voz alta (TTS) NÃO passa por este worker: usa a Web
+// Speech API do próprio navegador (vozes do sistema, sem modelo e sem
+// download) — decisão documentada no registry.
 
 import { pipeline, env } from '__CLARIFICA_BIBLIOTECA__';
 
@@ -33,6 +43,16 @@ if (!baseVendor.startsWith('__')) {
 
 let summarizer = null;
 let imageCaptioner = null;
+let transcritor = null;
+let leitorDeTexto = null;
+let tradutor = null;
+
+// O modelo en-ROMANCE traduz para qualquer língua românica; o produto
+// Clarifica.ai atende público pt-BR, então o código de destino é fixado
+// como português no prefixo de origem (convenção dos modelos Marian
+// multilíngues: ">>pt<< " força o alvo português). Documentado no
+// VERSOES_MODELOS.md e exercitado por inferência real nos testes.
+const CODIGO_ALVO_PT = '>>pt<< ';
 
 self.onmessage = async (event) => {
   const { type, data } = event.data;
@@ -69,6 +89,66 @@ self.onmessage = async (event) => {
       self.postMessage({ type: 'image-description', description: output[0].generated_text, imageUrl: data });
     } catch (error) {
       self.postMessage({ type: 'error', error: "erro-imagem" });
+    }
+  }
+
+  if (type === 'transcribe-audio') {
+    // `data` chega como Float32Array (PCM mono 16 kHz) já reamostrado na
+    // página — ver reamostrarPara16k em popup.js. Whisper aceita também
+    // URLs, mas aqui o áudio já foi decodificado/resampulado pela página
+    // (vídeo e podcast compartilham o mesmo caminho).
+    try {
+      if (!transcritor) {
+        self.postMessage({ type: 'status', message: "Carregando modelo de transcrição (~45MB, 1ª vez só)..." });
+        transcritor = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny', {
+          quantized: true,
+          revision: '5332fcc35e32a33b86612b9a57a89be7906102b1'
+        });
+      }
+      self.postMessage({ type: 'status', message: "Transcrevendo áudio..." });
+      // chunk_length_s/stride_length_s viabilizam áudios longos (podcasts)
+      // em janelas de 30 s com sobreposição — o idioma é detectado pelo
+      // próprio Whisper (sem opção de idioma fixada).
+      const output = await transcritor(data, { chunk_length_s: 30, stride_length_s: 5 });
+      self.postMessage({ type: 'transcription', transcript: output.text });
+    } catch (error) {
+      self.postMessage({ type: 'error', error: "erro-audio" });
+    }
+  }
+
+  if (type === 'ocr-image') {
+    // `data` é o src de uma <img> — mesmo contrato do describe-image.
+    // trocr-small-printed lê TEXTO IMPRESSO; o resultado é aplicado como
+    // alt/aria-label pela página (WCAG 1.4.5 — imagens de texto).
+    try {
+      if (!leitorDeTexto) {
+        self.postMessage({ type: 'status', message: "Carregando modelo de OCR (~60MB, 1ª vez só)..." });
+        leitorDeTexto = await pipeline('image-to-text', 'Xenova/trocr-small-printed', {
+          quantized: true,
+          revision: '56c1626ea0b4aab378f3228235be2e824d4256bd'
+        });
+      }
+      const output = await leitorDeTexto(data);
+      self.postMessage({ type: 'ocr-text', text: output[0].generated_text, imageUrl: data });
+    } catch (error) {
+      self.postMessage({ type: 'error', error: "erro-ocr" });
+    }
+  }
+
+  if (type === 'translate-text') {
+    try {
+      if (!tradutor) {
+        self.postMessage({ type: 'status', message: "Carregando modelo de tradução (~115MB, 1ª vez só)..." });
+        tradutor = await pipeline('translation', 'Xenova/opus-mt-en-ROMANCE', {
+          quantized: true,
+          revision: '9d2ba69ac80c8e8453c3d9a1e2323a0e7b8ca3cd'
+        });
+      }
+      self.postMessage({ type: 'status', message: "Traduzindo..." });
+      const output = await tradutor(CODIGO_ALVO_PT + data);
+      self.postMessage({ type: 'translation', translation: output[0].translation_text });
+    } catch (error) {
+      self.postMessage({ type: 'error', error: "erro-traducao" });
     }
   }
 };

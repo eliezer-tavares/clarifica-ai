@@ -45,14 +45,14 @@ jobs:
         with:
           node-version: 24
 
-      # Os pesos (~580 MB) são baixados uma única vez pelo job; a chave
+      # Os pesos (~800 MB) são baixados uma única vez pelo job; a chave
       # embute os SHAs fixados em VERSOES_MODELOS.md — mudou o modelo,
       # invalida o cache automaticamente.
       - name: Cache dos modelos de IA (Hugging Face)
         uses: actions/cache@v4
         with:
           path: clarifica-ai/tests/.cache
-          key: hf-modelos-distilbart-a6c58857--vitgpt2-215b4edc
+          key: hf-modelos-distilbart-a6c58857--vitgpt2-215b4edc--whisper-5332fcc3--trocr-56c1626e--opusmt-9d2ba69a
 
       - name: Instalar dependências (até 3 tentativas)
         run: |
@@ -69,14 +69,14 @@ jobs:
           echo "::error::Falha no npm ci após 3 tentativas."
           exit 1
 
-      # Os pesos (~580 MB) são baixados UMA vez por job, em um passo
+      # Os pesos (~800 MB) são baixados UMA vez por job, em um passo
       # DEDICADO (fora do node --test) e com ATÉ 3 TENTATIVAS: falhas
       # transitórias de rede ao Hugging Face — comuns em runners — não
       # derrubam mais a suíte inteira com erro ambíguo dentro de um teste.
       - name: Pré-baixar modelos de IA do Hugging Face (até 3 tentativas)
         run: |
           for tentativa in 1 2 3; do
-            echo "::group::Tentativa $tentativa de 3 — baixar pesos (~580 MB)"
+            echo "::group::Tentativa $tentativa de 3 — baixar pesos (~800 MB)"
             if npm run preparar:modelos; then
               echo "::endgroup::"
               echo "Modelos prontos em tests/.cache."

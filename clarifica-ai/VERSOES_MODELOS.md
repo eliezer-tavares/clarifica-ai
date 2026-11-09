@@ -8,8 +8,8 @@ O bloco abaixo é a única fonte autorizada de versões. Ele é **lido por teste
 
 ```json
 {
-  "registry_versao": 2,
-  "atualizado_em": "2026-11-07",
+  "registry_versao": 3,
+  "atualizado_em": "2026-11-09",
   "transformers_js": {
     "pacote_npm": "@xenova/transformers",
     "versao": "2.14.0",
@@ -40,7 +40,41 @@ O bloco abaixo é a única fonte autorizada de versões. Ele é **lido por teste
       "tamanho_aproximado": "~250 MB",
       "revisao_verificada_em": "2026-10-27",
       "vigilancia": "em 2026-11-07 a HEAD do repositório upstream avançou para 077550ae0729f9af280c9d885ea9b0380fc8e815; a revisão fixada (215b4edc) permanece a versão validada do projeto — migração só via procedimento de upgrade, com avaliação de qualidade dos outputs"
+    },
+    "transcricao": {
+      "id": "Xenova/whisper-tiny",
+      "revisao": "5332fcc35e32a33b86612b9a57a89be7906102b1",
+      "tarefa": "automatic-speech-recognition",
+      "quantizacao": "int8 (quantized: true)",
+      "tamanho_aproximado": "~45 MB",
+      "revisao_verificada_em": "2026-11-09",
+      "nota": "versão multilíngue (não .en): o idioma do áudio é detectado pelo próprio modelo — vídeos e podcasts em qualquer língua; a entrada chega como PCM mono 16 kHz reamostrado na página"
+    },
+    "ocr": {
+      "id": "Xenova/trocr-small-printed",
+      "revisao": "56c1626ea0b4aab378f3228235be2e824d4256bd",
+      "tarefa": "image-to-text",
+      "quantizacao": "int8 (quantized: true)",
+      "tamanho_aproximado": "~60 MB",
+      "revisao_verificada_em": "2026-11-09",
+      "nota": "leitura de TEXTO IMPRESSO; o texto extraído é aplicado como alt/aria-label da imagem (WCAG 1.4.5)",
+      "vigilancia": "em 2026-11-09 a HEAD do upstream não foi avaliada para migração; a revisão fixada (56c1626e) é a versão validada por inferência real (fixture texto-ocr.png)"
+    },
+    "traducao": {
+      "id": "Xenova/opus-mt-en-ROMANCE",
+      "revisao": "9d2ba69ac80c8e8453c3d9a1e2323a0e7b8ca3cd",
+      "tarefa": "translation",
+      "quantizacao": "int8 (quantized: true)",
+      "tamanho_aproximado": "~115 MB",
+      "revisao_verificada_em": "2026-11-09",
+      "nota": "modelo Marian multilíngue EN→línguas românicas; o produto fixa o destino em português pelo prefixo '>>pt<< ' no texto de origem (convenção dos modelos Marian multilíngues), aplicado no ai-worker.js"
     }
+  },
+  "tts": {
+    "tecnologia": "Web Speech API (speechSynthesis)",
+    "origem": "vozes do sistema operacional (sem modelo, sem download, offline)",
+    "decisao": "v1.3.0 — a leitura em voz alta usa a API nativa do navegador em vez de um modelo neural (ex.: SpeechT5, ~100 MB): as vozes do sistema têm qualidade superior, não custam download e já são as que o usuário usa em todo o sistema; a síntese roda na PÁGINA (sobrevive ao fechamento do popup) e o Ctrl+Shift+X a interrompe",
+    "sem_revisao": true
   }
 }
 ```
@@ -48,6 +82,8 @@ O bloco abaixo é a única fonte autorizada de versões. Ele é **lido por teste
 **Como fixar uma revisão:** a revisão é o SHA do commit do repositório do modelo no Hugging Face (obtido via `https://huggingface.co/api/models/<id>`, campo `sha`). Fixar o SHA — e não a branch `main` — garante que os pesos baixados hoje são bit a bit os mesmos daqui a um ano, condição necessária para reproducibilidade acadêmica, auditoria de comportamento e diagnóstico de regressões.
 
 **Por que o campo `vigilancia` existe:** fixar por SHA torna a divergência upstream visível e inofensiva. O teste não exige que a HEAD coincida com a revisão fixada; exige que o projeto continue baixando EXATAMENTE a revisão validada — que permanece acessível no Hugging Face mesmo depois de a upstream avançar.
+
+**Por que a TTS vive no registry sem ser modelo:** a seção 1 também documenta decisões de dependência de IA que NÃO resultam em download — a leitura em voz alta (v1.3.0) usa a Web Speech API nativa. O teste automatizado garante que essa decisão permanece declarada (e que nenhum modelo de TTS entre por engano).
 
 ## 2. Onde cada versão vive no código
 
@@ -64,7 +100,7 @@ O bloco abaixo é a única fonte autorizada de versões. Ele é **lido por teste
 
 O teste `tests/versoes-modelos.test.js` lê o registry deste arquivo e confronta todos os artefatos acima (incluindo a presença e a integridade dos binários vendados). Qualquer divergência quebra o CI **antes** de uma inconsistência chegar ao usuário.
 
-> **v1.2.0 — registry inalterado, por decisão:** os Perfis Neurodivergentes (TEA, TDAH, Dislexia) foram implementados exclusivamente com CSS/DOM/JS nativos — nenhuma biblioteca nova, nenhum modelo novo, nenhuma permissão nova. Não há, portanto, nada a fixar aqui: `registry_versao` permanece 2, os SHAs dos modelos e a versão vendada da Transformers.js são exatamente os mesmos, e a chave de cache do CI segue válida. Quando a v1.3 introduzir TTS/transcrição/OCR, as novas dependências de IA entrarem por este registry (e só por ele), com o procedimento da seção 4.
+> **v1.3.0 — registry sobe para 3 (Áudio e Multimodal):** três modelos novos entram por este registry, na revisão fixada e auditada por inferência real: `Xenova/whisper-tiny` (transcrição de áudio 16 kHz de vídeos e podcasts), `Xenova/trocr-small-printed` (OCR de texto impresso aplicado como alt/aria-label) e `Xenova/opus-mt-en-ROMANCE` (tradução EN→PT com destino fixado por `>>pt<<`). A leitura em voz alta NÃO adiciona modelo: usa a Web Speech API (vozes do sistema), decisão declarada no próprio registry (`tts`). A chave de cache do CI mudou em lockstep (agora embute os 5 SHAs) e o total de pesos sobe de ~580 MB para ~800 MB — README e `ci.yml` atualizados na mesma revisão.
 
 ## 3. Por que fixar (as quatro razões)
 

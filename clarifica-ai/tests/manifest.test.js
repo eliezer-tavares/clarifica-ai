@@ -9,7 +9,7 @@ const manifest = JSON.parse(readExt('manifest.json'));
 test('manifest: JSON válido com essenciais do Manifest V3', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'Clarifica.ai');
-  assert.equal(manifest.version, '1.2.0', 'versão da release corrente (atualizar o teste ao subir versão)');
+  assert.equal(manifest.version, '1.3.0', 'versão da release corrente (atualizar o teste ao subir versão)');
   assert.ok(manifest.description.length > 20, 'descrição significativa');
   assert.match(manifest.description, /offline/i);
 });
@@ -33,14 +33,19 @@ test('manifest: ícone é um PNG real de 128×128 (cabeçalho binário)', () => 
   assert.equal(buf.readUInt32BE(20), 128, 'altura 128');
 });
 
-test('manifest: os 4 atalhos de teclado existem e são válidos (perfis são acionados pelo popup — nenhum atalho novo para não colidir com os existentes)', () => {
+test('manifest: os 4 atalhos de teclado existem e são válidos + comando de tradução sem atalho padrão (v1.3.0)', () => {
   const cmds = Object.keys(manifest.commands).sort();
-  assert.deepEqual(cmds, ['toggle-imagens', 'toggle-leitura', 'toggle-reset', 'toggle-resumo']);
+  assert.deepEqual(cmds, ['toggle-imagens', 'toggle-leitura', 'toggle-reset', 'toggle-resumo', 'traduzir-selecao']);
   const esperados = { 'toggle-resumo': 'Ctrl+Shift+R', 'toggle-leitura': 'Ctrl+Shift+L', 'toggle-imagens': 'Ctrl+Shift+A', 'toggle-reset': 'Ctrl+Shift+X' };
   for (const [nome, atalho] of Object.entries(esperados)) {
     assert.equal(manifest.commands[nome].suggested_key.default, atalho, `atalho de ${nome}`);
     assert.ok(manifest.commands[nome].description.length >= 10, `descrição de ${nome}`);
   }
+  // O Chrome aceita no MÁXIMO 4 atalhos sugeridos por extensão: o comando
+  // de tradução é publicado sem suggested_key e fica configurável pelo
+  // usuário em chrome://extensions/shortcuts (documentado no README).
+  assert.ok(!manifest.commands['traduzir-selecao'].suggested_key, 'traduzir-selecao sem atalho sugerido (limite de 4 do Chrome)');
+  assert.ok(manifest.commands['traduzir-selecao'].description.length >= 10, 'descrição de traduzir-selecao');
 });
 
 test('manifest: permissões mínimas e CSP restritiva', () => {

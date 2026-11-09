@@ -112,7 +112,8 @@ test('perfis: popup com 3 botões rotulados, exclusivos e sem aria-pressed inici
   assert.match(botaoPerfil(document, 'tea').textContent, /Perfil TEA/);
   assert.match(botaoPerfil(document, 'tdah').textContent, /Perfil TDAH/);
   assert.match(botaoPerfil(document, 'dislexia').textContent, /Perfil Dislexia/);
-  assert.match(document.querySelector('.secao-titulo:last-of-type').textContent, /Perfis Neurodivergentes/);
+  const titulos = [...document.querySelectorAll('.secao-titulo')].map((h) => h.textContent);
+  assert.ok(titulos.some((t) => /Perfis Neurodivergentes/.test(t)), 'seção de perfis presente (a v1.3.0 adicionou a seção de Áudio e Multimodal depois dela)');
 });
 
 test('perfis: aplicar o perfil TEA injeta CSS pronto + anúncio traduzido e confirma no popup e no storage', async () => {

@@ -42,14 +42,14 @@ async function aguardar(condicao, maxMs = 500, passo = 5) {
   while (!(await condicao()) && Date.now() - inicio < maxMs) await sleep(passo);
 }
 
-test('popup: estrutura com 11 botões nativos, slider de intensidade, status ao vivo e região de resultado', async () => {
+test('popup: estrutura com 15 botões nativos, slider de intensidade, status ao vivo e região de resultado', async () => {
   const { document } = await setup();
   const botoes = [...document.querySelectorAll('button')];
-  assert.equal(botoes.length, 11, '9 modos (6 originais + 3 perfis) + fechar + tema');
+  assert.equal(botoes.length, 15, '13 modos (6 originais + 3 perfis + 4 áudio/multimodal da v1.3.0) + fechar + tema');
   assert.ok(botoes.every((b) => b.tagName === 'BUTTON'), 'todos os controles clicáveis são <button> nativos');
   assert.ok(botoes.every((b) => b.getAttribute('tabindex') !== '-1'), 'nenhum botão fora da ordem de TAB');
   assert.ok(botoes.every((b) => b.textContent.trim().length > 0), 'todos com rótulo acessível');
-  for (const mode of ['leitura', 'resumo', 'imagens', 'protanopia', 'deuteranopia', 'tritanopia', 'tea', 'tdah', 'dislexia']) {
+  for (const mode of ['leitura', 'resumo', 'imagens', 'protanopia', 'deuteranopia', 'tritanopia', 'tea', 'tdah', 'dislexia', 'transcrever', 'ocr', 'traduzir', 'voz']) {
     assert.ok(botao(document, mode), `botão ${mode} presente`);
   }
   const slider = document.getElementById('intensidade');
@@ -349,10 +349,13 @@ test('popup: descrição de imagens — processa apenas imagens sem alt e aplica
   }
 
   botao(document, 'imagens').click();
-  await sleep(30);
+  await aguardar(() => Promise.resolve(statusDe(document).textContent === 'Descrevendo 3 imagens...'), 3000);
   assert.equal(statusDe(document).textContent, 'Descrevendo 3 imagens...', 'quantidade traduzida com placeholder i18n');
 
-  await sleep(150);
+  // Espera o Worker terminar (todas as respostas processadas) em vez de
+  // tempo fixo — os postMessage e as respostas usam temporizadores que
+  // atrasam em máquinas carregadas (corrida intermitente).
+  await aguardar(() => Promise.resolve(FakeWorker.instances[0] && FakeWorker.instances[0].terminated), 3000);
   const worker = FakeWorker.instances[0];
   assert.equal(worker.received.length, 3, '3 imagens enviadas ao Worker');
   assert.ok(worker.received.every((m) => m.type === 'describe-image'));
