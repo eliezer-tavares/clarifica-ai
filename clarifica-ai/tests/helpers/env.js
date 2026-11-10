@@ -60,9 +60,10 @@ function makeDom(html = '<!DOCTYPE html><html lang="pt-BR"><body></body></html>'
 }
 
 /** Stub da API chrome.* com registro de chamadas; executeScript roda a função injetada de verdade no jsdom.
- * opts.storageInicial pré-popula o chrome.storage.local (testes de persistência). */
+ * opts.storageInicial pré-popula o chrome.storage.local (testes de persistência).
+ * opts.respondRuntime injeta respostas do service worker para runtime.sendMessage (testes de legendas v1.4.0). */
 function makeChromeStub(window, opts = {}) {
-  const calls = { executeScript: [], commands: [], getURL: [], onChanged: [] };
+  const calls = { executeScript: [], commands: [], getURL: [], onChanged: [], sendMessage: [], onMessage: [] };
   const fakeTab = { id: opts.tabId ?? 7, active: true, currentWindow: true };
   const storageStore = { ...(opts.storageInicial || {}) };
 
@@ -88,12 +89,32 @@ function makeChromeStub(window, opts = {}) {
 
   const chrome = {
     runtime: {
-      getURL: (p) => { calls.getURL.push(p); return `chrome-extension://clarifica-ai/${p}`; }
+      getURL: (p) => { calls.getURL.push(p); return `chrome-extension://clarifica-ai/${p}`; },
+      // v1.4.0 (legendas ao vivo): sendMessage para o service worker com
+      // registro de chamadas e resposta injetável por teste.
+      sendMessage: async (msg) => {
+        calls.sendMessage.push(msg);
+        if (typeof opts.respondRuntime === 'function') return opts.respondRuntime(msg);
+        // Resposta padrão: service worker consentindo (como o fluxo real
+        // faz quando a captura é aceita).
+        if (msg && msg.type === 'clarifica-legendas') {
+          if (msg.action === 'iniciar') return opts.respostaLegendasIniciar || { success: true };
+          if (msg.action === 'parar') return { success: true };
+        }
+        return { success: true };
+      },
+      // v1.4.0: broadcasts do offscreen/SW chegam ao popup por este canal.
+      onMessage: { addListener: (cb) => { calls.onMessage.push(cb); } }
     },
     tabs: { query: async () => [fakeTab] },
     scripting: {
       executeScript: async (details) => {
         calls.executeScript.push(details);
+        // v1.4.0 (verificador WCAG 1.2.2): o teste pode injetar a resposta
+        // da função injetada (contagens da auditoria fixadas por cenário).
+        if (opts.overrideAuditoria && Array.isArray(details.args) && details.args[0] === 'auditar-legendas') {
+          return [{ result: opts.overrideAuditoria }];
+        }
         const result = await details.func(...(details.args || []));
         return [{ result }];
       }

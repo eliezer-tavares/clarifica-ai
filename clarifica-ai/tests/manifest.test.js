@@ -9,7 +9,7 @@ const manifest = JSON.parse(readExt('manifest.json'));
 test('manifest: JSON válido com essenciais do Manifest V3', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'Clarifica.ai');
-  assert.equal(manifest.version, '1.3.0', 'versão da release corrente (atualizar o teste ao subir versão)');
+  assert.equal(manifest.version, '1.4.0', 'versão da release corrente (atualizar o teste ao subir versão)');
   assert.ok(manifest.description.length > 20, 'descrição significativa');
   assert.match(manifest.description, /offline/i);
 });
@@ -52,7 +52,13 @@ test('manifest: permissões mínimas e CSP restritiva', () => {
   for (const p of ['activeTab', 'scripting', 'storage']) {
     assert.ok(manifest.permissions.includes(p), `permissão ${p}`);
   }
-  assert.equal(manifest.permissions.length, 3, 'nenhuma permissão excessiva');
+  // Legendas ao vivo (v1.4.0): tabCapture (captura do áudio da aba ativa)
+  // e offscreen (documento dedicado à captura/inferência — o service
+  // worker não tem DOM nem APIs de mídia). Nada além disso.
+  for (const p of ['tabCapture', 'offscreen']) {
+    assert.ok(manifest.permissions.includes(p), `permissão ${p} (v1.4.0)`);
+  }
+  assert.equal(manifest.permissions.length, 5, 'nenhuma permissão excessiva (3 originais + 2 da v1.4.0)');
   assert.deepEqual(manifest.host_permissions, ['<all_urls>']);
   const csp = manifest.content_security_policy.extension_pages;
   assert.ok(csp.includes("script-src 'self'"), 'script-src restrito à origem própria');
@@ -68,5 +74,7 @@ test('manifest: worker de IA e vendor publicados como recursos web acessíveis',
 
 test('manifest: autoria (e-mail de contato) e versão mínima do Chrome', () => {
   assert.equal(manifest.author.email, 'contact@eliezertavaresdeoliveira.com');
-  assert.ok(parseInt(manifest.minimum_chrome_version, 10) >= 102, 'Chrome 102+ (atributo inert)');
+  // v1.4.0: 102 → 116 — o getMediaStreamId no service worker exige
+  // Chrome 116+ (o documento offscreen existe desde o 109).
+  assert.ok(parseInt(manifest.minimum_chrome_version, 10) >= 116, 'Chrome 116+ (tabCapture.getMediaStreamId no SW)');
 });

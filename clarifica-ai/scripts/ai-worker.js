@@ -26,6 +26,16 @@
 // A leitura em voz alta (TTS) NÃO passa por este worker: usa a Web
 // Speech API do próprio navegador (vozes do sistema, sem modelo e sem
 // download) — decisão documentada no registry.
+//
+// v1.4.0 — Legendas ao Vivo e Bilinguismo: a tarefa transcribe-audio
+// aceita `opcoes` na mensagem (nenhum modelo novo — o whisper-tiny do
+// registry v3 já é multilíngue):
+//   opcoes.tarefa = 'traduzir' → task: 'translate' do pipeline Whisper:
+//     fala em qualquer idioma detectado vira TRANSCRIÇÃO EM INGLÊS
+//     (legendas em inglês para falantes de inglês);
+//   opcoes.idioma → hint opcional de idioma de origem (código Whisper,
+//     ex.: 'pt'). Sem opcoes (transcrição pontual da v1.3.0), o
+//     comportamento permanece exatamente o mesmo — detecção automática.
 
 import { pipeline, env } from '__CLARIFICA_BIBLIOTECA__';
 
@@ -55,7 +65,7 @@ let tradutor = null;
 const CODIGO_ALVO_PT = '>>pt<< ';
 
 self.onmessage = async (event) => {
-  const { type, data } = event.data;
+  const { type, data, opcoes = {} } = event.data;
 
   if (type === 'summarize') {
     try {
@@ -94,9 +104,10 @@ self.onmessage = async (event) => {
 
   if (type === 'transcribe-audio') {
     // `data` chega como Float32Array (PCM mono 16 kHz) já reamostrado na
-    // página — ver reamostrarPara16k em popup.js. Whisper aceita também
-    // URLs, mas aqui o áudio já foi decodificado/resampulado pela página
-    // (vídeo e podcast compartilham o mesmo caminho).
+    // página — ver reamostrarPara16k em scripts/clarifica-puro.js (fonte
+    // canônica v1.4.0; o popup mantém a cópia inline que sempre usou).
+    // Whisper aceita também URLs, mas aqui o áudio já foi decodificado/
+    // reamostrado pela página (vídeo e podcast compartilham o caminho).
     try {
       if (!transcritor) {
         self.postMessage({ type: 'status', message: "Carregando modelo de transcrição (~45MB, 1ª vez só)..." });
@@ -109,7 +120,14 @@ self.onmessage = async (event) => {
       // chunk_length_s/stride_length_s viabilizam áudios longos (podcasts)
       // em janelas de 30 s com sobreposição — o idioma é detectado pelo
       // próprio Whisper (sem opção de idioma fixada).
-      const output = await transcritor(data, { chunk_length_s: 30, stride_length_s: 5 });
+      // v1.4.0: opcoes.tarefa = 'traduzir' ativa task: 'translate' do
+      // Whisper (fala em qualquer idioma → texto em inglês); opcoes.idioma
+      // é um hint opcional do idioma de origem. Sem opcoes, comportamento
+      // idêntico ao da v1.3.0.
+      const configJanelas = { chunk_length_s: 30, stride_length_s: 5 };
+      if (opcoes.tarefa === 'traduzir') configJanelas.task = 'translate';
+      if (typeof opcoes.idioma === 'string' && opcoes.idioma) configJanelas.language = opcoes.idioma;
+      const output = await transcritor(data, configJanelas);
       self.postMessage({ type: 'transcription', transcript: output.text });
     } catch (error) {
       self.postMessage({ type: 'error', error: "erro-audio" });

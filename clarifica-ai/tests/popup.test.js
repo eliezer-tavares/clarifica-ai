@@ -42,16 +42,27 @@ async function aguardar(condicao, maxMs = 500, passo = 5) {
   while (!(await condicao()) && Date.now() - inicio < maxMs) await sleep(passo);
 }
 
-test('popup: estrutura com 15 botões nativos, slider de intensidade, status ao vivo e região de resultado', async () => {
+test('popup: estrutura com 17 botões nativos, slider de intensidade, status ao vivo e região de resultado', async () => {
   const { document } = await setup();
   const botoes = [...document.querySelectorAll('button')];
-  assert.equal(botoes.length, 15, '13 modos (6 originais + 3 perfis + 4 áudio/multimodal da v1.3.0) + fechar + tema');
+  assert.equal(botoes.length, 17, '15 modos (6 originais + 3 perfis + 4 áudio/multimodal + 2 legendas da v1.4.0) + fechar + tema');
   assert.ok(botoes.every((b) => b.tagName === 'BUTTON'), 'todos os controles clicáveis são <button> nativos');
   assert.ok(botoes.every((b) => b.getAttribute('tabindex') !== '-1'), 'nenhum botão fora da ordem de TAB');
   assert.ok(botoes.every((b) => b.textContent.trim().length > 0), 'todos com rótulo acessível');
-  for (const mode of ['leitura', 'resumo', 'imagens', 'protanopia', 'deuteranopia', 'tritanopia', 'tea', 'tdah', 'dislexia', 'transcrever', 'ocr', 'traduzir', 'voz']) {
+  for (const mode of ['leitura', 'resumo', 'imagens', 'protanopia', 'deuteranopia', 'tritanopia', 'tea', 'tdah', 'dislexia', 'transcrever', 'ocr', 'traduzir', 'voz', 'legendas', 'verificar-legendas']) {
     assert.ok(botao(document, mode), `botão ${mode} presente`);
   }
+  // Legendas ao vivo (v1.4.0): toggle com aria-pressed e seletor de idioma.
+  const btnLegendas = botao(document, 'legendas');
+  assert.equal(btnLegendas.getAttribute('aria-pressed'), 'false', 'legendas inicia desligado (WCAG 4.1.2)');
+  const btnVerificar = botao(document, 'verificar-legendas');
+  assert.ok(!btnVerificar.hasAttribute('aria-pressed'), 'verificador é ação, não toggle (sem aria-pressed)');
+  const seletor = document.getElementById('idioma-legendas');
+  assert.equal(seletor.tagName, 'SELECT', 'seletor de idioma das legendas presente');
+  assert.equal(seletor.querySelectorAll('option').length, 2, 'duas opções: original × inglês');
+  assert.equal(seletor.value, 'original', 'original é o padrão');
+  const rotuloSeletor = document.querySelector('label[for="idioma-legendas"]');
+  assert.ok(rotuloSeletor && rotuloSeletor.textContent.length > 0, 'seletor rotulado (WCAG 1.3.1/4.1.2)');
   const slider = document.getElementById('intensidade');
   assert.equal(slider.getAttribute('type'), 'range', 'slider de intensidade presente');
   assert.equal(slider.value, '100', 'intensidade padrão 100%');

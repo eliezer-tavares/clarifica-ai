@@ -89,5 +89,29 @@
     "placeholders": { "quantidade": { "content": "$1" } }
   },
   "anuncioTraducaoConcluida": { "message": "Clarifica.ai: Translation finished." },
-  "anuncioTraducao": { "message": "Clarifica.ai: Translating the selected passage." }
+  "anuncioTraducao": { "message": "Clarifica.ai: Translating the selected passage." },
+  "btnLegendasAoVivo": { "message": "💬 Live Captions (CC)" },
+  "btnVerificarLegendas": { "message": "🔍 Check captions (WCAG 1.2.2)" },
+  "labelIdiomaLegendas": { "message": "Caption language" },
+  "idiomaLegendaOriginal": { "message": "Original (spoken language)" },
+  "idiomaLegendaIngles": { "message": "English (translation)" },
+  "notaLegendasAtraso": { "message": "Captions are generated on-device (100% local) and near real-time: they typically arrive with a 5–15 second delay." },
+  "statusLegendasIniciando": { "message": "Starting live captions..." },
+  "statusLegendasAtivas": { "message": "Captions active — capturing tab audio." },
+  "statusLegendasParadas": { "message": "Live captions stopped." },
+  "statusCapturaNegada": { "message": "Could not capture the tab audio (permission denied)." },
+  "statusAbaSemMidia": { "message": "This tab does not allow audio capture (browser internal pages are not supported)." },
+  "statusCapturaEncerrada": { "message": "Capture ended: the page navigated or the audio finished." },
+  "statusFalhaLegendas": { "message": "Failed to start live captions." },
+  "statusAuditoriaLegendas": {
+    "message": "WCAG 1.2.2 audit: $sem$ of $total$ videos lack captions. Use Live Captions to generate them.",
+    "placeholders": { "sem": { "content": "$1" }, "total": { "content": "$2" } }
+  },
+  "statusAuditoriaLegendasOk": {
+    "message": "All $total$ videos on the page have captions.",
+    "placeholders": { "total": { "content": "$1" } }
+  },
+  "statusAuditoriaSemVideo": { "message": "No video on the page to audit." },
+  "anuncioLegendasNaPagina": { "message": "Clarifica.ai: Live captions activated — capturing tab audio." },
+  "chipLegendasAtivas": { "message": "Captions active — capturing audio" }
 }

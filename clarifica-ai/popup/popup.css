@@ -80,7 +80,21 @@ p { font-size: 0.8rem; color: var(--secundario); margin: 0 0 16px 0; }
 .mode-btn.midia[data-mode="ocr"] { border-left-color: #f97316; }
 .mode-btn.midia[data-mode="traduzir"] { border-left-color: #6366f1; }
 .mode-btn.midia[data-mode="voz"] { border-left-color: #ec4899; }
+/* Legendas ao vivo (v1.4.0) — toggle com aria-pressed e seletor de idioma. */
+.mode-btn.midia[data-mode="legendas"] { border-left-color: #0ea5e9; }
+.mode-btn.midia[data-mode="verificar-legendas"] { border-left-color: #eab308; }
 .mode-btn.midia.ativo { outline: 2px solid var(--primary); outline-offset: 1px; }
+
+/* Seletor do idioma das legendas (v1.4.0) — mesma linha visual do slider. */
+.selector-row { display: flex; align-items: center; gap: 8px; margin: 8px 0 4px; }
+.selector-row label { font-size: 0.8rem; color: var(--secundario); flex: 1; }
+.selector-row select {
+  flex: 1.2; padding: 6px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); font-size: 0.8rem; cursor: pointer;
+}
+.selector-row select:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+/* Nota honesta de latência das legendas (v1.4.0): texto de apoio menor. */
+.nota-legendas { font-size: 0.72rem; color: var(--secundario); margin: 4px 0 14px; line-height: 1.4; }
 
 .slider-row { display: flex; align-items: center; gap: 8px; margin: 8px 0 14px; }
 .slider-row label { font-size: 0.8rem; color: var(--secundario); flex: 1; }

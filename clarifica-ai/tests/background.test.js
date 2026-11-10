@@ -220,6 +220,65 @@ test('background: comando de tradução (v1.3.0) dispara anúncio i18n + TRIGGER
   assert.deepEqual(normalizadas, [{ type: 'TRIGGER_ACTION', action: 'translate-selection' }]);
 });
 
+test('background: reset-all desmonta o host de legendas da página (v1.4.0)', async () => {
+  const { window, document } = await setup();
+
+  // Estado sujo como o prepararLegendasNaPagina deixaria: track com Blob
+  // WebVTT, overlay de sobreposição, chip de estado, estilo do pulso e
+  // anúncio único.
+  const video = document.createElement('video');
+  document.querySelector('main').appendChild(video);
+  const track = document.createElement('track');
+  track.kind = 'captions';
+  video.appendChild(track);
+  const sobreposicao = document.createElement('div');
+  sobreposicao.id = 'clarifica-overlay-legendas';
+  document.body.appendChild(sobreposicao);
+  const chip = document.createElement('div');
+  chip.id = 'clarifica-chip-legendas';
+  document.body.appendChild(chip);
+  const estilo = document.createElement('style');
+  estilo.id = 'clarifica-estilo-legendas';
+  document.documentElement.appendChild(estilo);
+  const anuncio = document.createElement('div');
+  anuncio.id = 'clarifica-anuncio-legendas';
+  document.body.appendChild(anuncio);
+  let urlRevogada = null;
+  window.__clarificaLegendas = {
+    trackEl: track,
+    sobreposicao,
+    chip,
+    urlVtt: 'blob:webvtt-simulado'
+  };
+
+  window.executarAcao('reset-all');
+
+  assert.ok(!track.isConnected, 'track <kind=captions> removido do vídeo');
+  assert.equal(document.getElementById('clarifica-overlay-legendas'), null, 'overlay de sobreposição removido');
+  assert.equal(document.getElementById('clarifica-chip-legendas'), null, 'chip de estado removido');
+  assert.equal(document.getElementById('clarifica-estilo-legendas'), null, 'estilo do pulso removido');
+  assert.equal(document.getElementById('clarifica-anuncio-legendas'), null, 'anúncio removido');
+  assert.equal(window.__clarificaLegendas, null, 'host de legendas zerado');
+});
+
+test('background: funções de legendas expostas degradam graciosamente sem APIs do Chrome (v1.4.0)', async () => {
+  const { window } = await setup();
+  // O ambiente de teste não tem chrome.offscreen/tabCapture/runtime — as
+  // funções do ciclo de vida existem e não lançam (guardas da casa).
+  assert.equal(typeof window.pararLegendas, 'function', 'pararLegendas disponível');
+  assert.equal(typeof window.iniciarLegendas, 'function', 'iniciarLegendas disponível');
+  assert.equal(typeof window.garantirDocumentoOffscreen, 'function', 'supervisor do offscreen disponível');
+  await assert.doesNotReject(() => window.pararLegendas('parada-pedida'), 'parada sem captura é inofensiva (idempotente)');
+  // A função de entrega na página limpa o host com retorno estruturado.
+  const host = { urlVtt: 'blob:x', trackEl: { remove() {} }, sobreposicao: null, chip: null };
+  window.__clarificaLegendas = host;
+  const resultado = window.desmontarLegendasNaPagina();
+  // Comparação cross-realm: o objeto nasce no realm do jsdom (função
+  // avaliada via window.eval) — deepEqual estrito compararia protótipos.
+  assert.ok(resultado && resultado.success === true, 'desmontagem idempotente com resposta');
+  assert.equal(window.__clarificaLegendas, null, 'host removido da página');
+});
+
 test('background: reset-all interrompe a leitura em voz alta da página (v1.3.0)', async () => {
   const { window } = await setup();
   let cancelamentos = 0;

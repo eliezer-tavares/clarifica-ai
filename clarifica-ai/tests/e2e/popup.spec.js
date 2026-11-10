@@ -11,17 +11,26 @@
 
 import { test, expect } from '@playwright/test';
 import { iniciarServidor } from './servidor.js';
-import { iniciarNavegadorComExtensao } from './auxiliar.js';
+import { iniciarNavegadorComExtensao, instalarGravadorDeAnuncios, anunciosGravados } from './auxiliar.js';
 
 let servidor;
 let navegador;
 let pagina;
 
 test.beforeAll(async () => {
+  // Lançamento a frio do Chromium (download recente, varredura do
+  // antivírus, criação de perfil) pode exceder o teto herdado de 45 s em
+  // máquinas carregadas — test.setTimeout DENTRO de beforeAll altera o
+  // timeout DO HOOK (documentação oficial do Playwright), não dos testes.
+  test.setTimeout(120000);
   servidor = await iniciarServidor();
   navegador = await iniciarNavegadorComExtensao();
   const aberta = await navegador.abrirPaginaDeTeste(`${servidor.url}/artigo`);
   pagina = aberta.pagina;
+  // Gravador de anúncios instalado ANTES de qualquer clique: os anúncios
+  // são transitórios (removidos após 3 s — popup.js) e a asserção lê o
+  // registro, imune à velocidade da máquina.
+  await instalarGravadorDeAnuncios(pagina);
 });
 
 test.afterAll(async () => {
@@ -55,14 +64,19 @@ for (const filtro of ['protanopia', 'deuteranopia', 'tritanopia']) {
     await navegador.popup.locator(`.mode-btn[data-mode="${filtro}"]`).click();
     await expect(navegador.popup.locator('#status')).toContainText('Filtro de daltonismo ativado');
 
+    // O filtro persiste no DOM — leitura direta é segura.
     const estado = await pagina.evaluate(() => ({
-      filtro: document.documentElement.style.filter,
-      anuncio: document.body.querySelector('[role="status"]:not(#clarifica-anuncio)')?.textContent || ''
+      filtro: document.documentElement.style.filter
     }));
+    // O anúncio é TRANSIENTE na página real (removido após 3 s —
+    // popup.js): a asserção lê o REGISTRO do gravador (MutationObserver),
+    // imune à velocidade da máquina — leitura do nó vivo era corrida e
+    // falhava em máquinas carregadas (anúncio já removido → string vazia).
+    const anuncios = await anunciosGravados(pagina);
 
     expect(estado.filtro).toContain('feColorMatrix');
     expect(estado.filtro).toContain('url("data:image/svg+xml');
-    expect(estado.anuncio).toContain('Filtro de daltonismo');
+    expect(anuncios.some((a) => a.texto.includes('Filtro de daltonismo')), 'anúncio registrado para leitor de tela (região transitiva por design)').toBe(true);
   });
 }
 
@@ -75,13 +89,15 @@ test('Perfil TEA (v1.2.0): pausa estímulos na página real e o segundo clique d
     const estilo = document.getElementById('clarifica-perfil-tea');
     return {
       estiloPresente: !!estilo,
-      pausaAnimacoes: (estilo?.textContent || '').includes('animation-play-state'),
-      anuncio: [...document.querySelectorAll('[role="status"]')].some((n) => /Perfil TEA ativado/.test(n.textContent || ''))
+      pausaAnimacoes: (estilo?.textContent || '').includes('animation-play-state')
     };
   });
+  // Anúncio pelo REGISTRO do gravador — o nó real é removido após 3 s
+  // (popup.js) e a leitura viva era corrida em máquinas carregadas.
+  const anuncios = await anunciosGravados(pagina);
   expect(estado.estiloPresente).toBe(true);
   expect(estado.pausaAnimacoes).toBe(true);
-  expect(estado.anuncio).toBe(true);
+  expect(anuncios.some((a) => a.texto.includes('Perfil TEA ativado')), 'anúncio registrado para leitor de tela (região transitiva por design)').toBe(true);
 
   // Toggle: clicar de novo desliga e restaura a página.
   await btn.click();
@@ -146,6 +162,118 @@ test('tradução (v1.3.0): sem seleção na página, o erro é claro e nenhum mo
   await navegador.popup.locator('.mode-btn[data-mode="traduzir"]').click();
   await expect(navegador.popup.locator('#status')).toHaveText('Selecione um trecho na página antes de traduzir.');
   await expect(navegador.popup.locator('#result-area')).toBeHidden();
+  await pagina.close();
+});
+
+// ---- Legendas ao vivo (v1.4.0) ----
+// A captura REAL de áudio de aba é limitada no Chromium headless (e é o
+// escopo do roteiro manual no TEST_REPORT). O E2E cobre o que é
+// confiável em headless: o verificador WCAG 1.2.2 na página real (com e
+// sem track), a resposta do toggle com feedback claro na interface e a
+// desmontagem do host de legendas pelo Ctrl+Shift+X.
+
+test('verificador WCAG 1.2.2 (v1.4.0): página real com e sem track relata contagens corretas', async () => {
+  const { pagina } = await navegador.abrirPaginaDeTeste(`${servidor.url}/video`);
+  await navegador.popup.locator('.mode-btn[data-mode="verificar-legendas"]').click();
+  await expect(navegador.popup.locator('#status')).toContainText('Auditoria WCAG 1.2.2');
+  await expect(navegador.popup.locator('#status')).toContainText('2 de 3 vídeos sem legendas',
+    'captions conta como legenda; chapters não conta (função pura real na página real)');
+  await pagina.close();
+});
+
+test('verificador WCAG 1.2.2 (v1.4.0): página de artigo sem vídeos informa ausência', async () => {
+  const { pagina } = await navegador.abrirPaginaDeTeste(`${servidor.url}/artigo`);
+  await navegador.popup.locator('.mode-btn[data-mode="verificar-legendas"]').click();
+  await expect(navegador.popup.locator('#status')).toHaveText('Nenhum vídeo na página para auditar.');
+  await pagina.close();
+});
+
+test('legendas ao vivo (v1.4.0): toggle responde na interface real com feedback claro e sem erros de console', async () => {
+  const { pagina } = await navegador.abrirPaginaDeTeste(`${servidor.url}/video`);
+  const statusPainel = navegador.popup.locator('#status');
+  await navegador.popup.locator('.mode-btn[data-mode="legendas"]').click();
+  // Em headless a captura pode ser aceita ou recusada — o que o recurso
+  // GARANTE em qualquer máquina é feedback traduzido e estado coerente:
+  // o status sai da fase transitória ("Processando..."/"Iniciando...")
+  // em no máximo ~10 s (tetos de segurança da captura) e nenhum erro de
+  // console aparece.
+  await expect(statusPainel).not.toHaveText(/Processando\.\.\.|Iniciando legendas ao vivo\.\.\./, { timeout: 30000 });
+  const status = await statusPainel.textContent();
+  expect(status).toMatch(/Legendas|captura|capturar|Falha/);
+  expect(navegador.erros).toEqual([]);
+  // Segundo clique no toggle: caminho oposto com feedback igualmente claro.
+  await navegador.popup.locator('.mode-btn[data-mode="legendas"]').click();
+  await expect(statusPainel).not.toHaveText(/Processando\.\.\.|Iniciando legendas ao vivo\.\.\./, { timeout: 30000 });
+  expect(await statusPainel.textContent()).toMatch(/Legendas|captura|capturar|Falha/);
+  expect(navegador.erros).toEqual([]);
+  await pagina.close();
+});
+
+test('reset-all (v1.4.0): desmonta track/overlay/chip de legendas e zera o host na página real', async () => {
+  const { pagina } = await navegador.abrirPaginaDeTeste(`${servidor.url}/video`);
+  // Estado sujo NO MUNDO ISOLADO das injeções — exatamente onde o
+  // prepararLegendasNaPagina o deixa em produção (o page.evaluate do
+  // Playwright vive no mundo MAIN, invisível às funções injetadas).
+  await navegador.serviceWorker.evaluate(async (tabUrl) => {
+    const [tab] = await chrome.tabs.query({ url: tabUrl });
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: (urlTeste) => {
+        const video = document.querySelector('video');
+        const track = document.createElement('track');
+        track.kind = 'captions';
+        video.appendChild(track);
+        const overlay = document.createElement('div');
+        overlay.id = 'clarifica-overlay-legendas';
+        document.body.appendChild(overlay);
+        const chip = document.createElement('div');
+        chip.id = 'clarifica-chip-legendas';
+        document.body.appendChild(chip);
+        const estilo = document.createElement('style');
+        estilo.id = 'clarifica-estilo-legendas';
+        document.documentElement.appendChild(estilo);
+        const anuncio = document.createElement('div');
+        anuncio.id = 'clarifica-anuncio-legendas';
+        document.body.appendChild(anuncio);
+        window.__clarificaLegendas = { trackEl: track, sobreposicao: overlay, chip, urlVtt: urlTeste };
+      },
+      args: ['blob:teste-simulado']
+    });
+  }, `${servidor.url}/video`);
+
+  // Espelho fiel do Ctrl+Shift+X: a ação reset-all executada no service
+  // worker real (mesma via do listener de chrome.commands).
+  await navegador.serviceWorker.evaluate(async (tabUrl) => {
+    const [tab] = await chrome.tabs.query({ url: tabUrl });
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: executarAcao,
+      args: ['reset-all']
+    });
+  }, `${servidor.url}/video`);
+
+  // A checagem de IDs funciona de qualquer mundo (DOM é compartilhado);
+  // o host zerado só é visível no mundo isolado — confirmado pela
+  // reexecução de leitura no mesmo mundo das injeções.
+  const limpo = await pagina.evaluate(() => ({
+    overlay: !!document.getElementById('clarifica-overlay-legendas'),
+    chip: !!document.getElementById('clarifica-chip-legendas'),
+    estilo: !!document.getElementById('clarifica-estilo-legendas'),
+    anuncio: !!document.getElementById('clarifica-anuncio-legendas')
+  }));
+  expect(limpo.overlay).toBe(false);
+  expect(limpo.chip).toBe(false);
+  expect(limpo.estilo).toBe(false);
+  expect(limpo.anuncio).toBe(false);
+  const hostIsolado = await navegador.serviceWorker.evaluate(async (tabUrl) => {
+    const [tab] = await chrome.tabs.query({ url: tabUrl });
+    const [resultado] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => window.__clarificaLegendas === null || window.__clarificaLegendas === undefined
+    });
+    return resultado.result;
+  }, `${servidor.url}/video`);
+  expect(hostIsolado).toBe(true, 'host de legendas zerado no mundo das injeções');
   await pagina.close();
 });
 

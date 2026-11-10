@@ -44,13 +44,57 @@ const PAGINA_CURTA = `<!DOCTYPE html>
 const IMAGEM_PRAIA = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200"><rect width="320" height="120" fill="#87ceeb"/><rect y="120" width="320" height="80" fill="#f4d58d"/><circle cx="260" cy="40" r="22" fill="#ffd700"/></svg>`;
 const IMAGEM_CIDADE = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200"><rect width="320" height="200" fill="#dfe7ef"/><rect x="30" y="70" width="50" height="130" fill="#7f8ea3"/><rect x="100" y="40" width="60" height="160" fill="#5b6b7f"/><rect x="180" y="90" width="45" height="110" fill="#93a5b8"/></svg>`;
 
+// Página com vídeo — exercita o verificador WCAG 1.2.2 da v1.4.0 na
+// página real: um vídeo SEM track de legendas, um COM <track kind=
+// "captions"> servido pelo mesmo servidor e um com kind incorreto
+// (chapters — não conta como legenda).
+const PAGINA_VIDEO = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><title>Portal de Exemplo — Vídeos</title></head>
+<body>
+  <main>
+    <h2>Galeria de vídeos sem legendas</h2>
+    <video id="sem-legenda" controls width="640" height="360">
+      <source src="/video.mp4" type="video/mp4">
+    </video>
+    <video id="com-legenda" controls width="480" height="270" src="/video.mp4">
+      <track kind="captions" srclang="pt-BR" src="/legendas.vtt" label="Legendas de teste">
+    </video>
+    <video id="com-capitulos" controls width="320" height="180" src="/video.mp4">
+      <track kind="chapters" srclang="pt-BR" src="/legendas.vtt" label="Capítulos (não é legenda)">
+    </video>
+  </main>
+</body>
+</html>`;
+
+// WebVTT servido por http:// — o track real do Chromium carrega estas
+// legendas na página de teste (mesmo canal nativo do recurso).
+const ARQUIVO_VTT = `WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nOlá do Clarifica.ai\n`;
+
+// Bytes mínimos de MP4 — os vídeos não precisam tocar: o verificador lê
+// o DOM (elementos e tracks), não a mídia.
+const VIDEO_MP4 = Buffer.from([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x6d, 0x70, 0x34, 0x32]);
+
 function iniciarServidor() {
   const servidor = http.createServer((req, res) => {
     const rota = (req.url || '/').split('?')[0];
+    if (rota === '/legendas.vtt') {
+      res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-store');
+      res.end(ARQUIVO_VTT);
+      return;
+    }
+    if (rota === '/video.mp4') {
+      res.setHeader('Content-Type', 'video/mp4');
+      res.setHeader('Cache-Control', 'no-store');
+      res.end(VIDEO_MP4);
+      return;
+    }
     const corpo =
       rota === '/pagina-curta' ? PAGINA_CURTA :
       rota === '/imagens/praca.svg' ? IMAGEM_PRAIA :
       rota === '/imagens/cidade.svg' ? IMAGEM_CIDADE :
+      rota === '/video' ? PAGINA_VIDEO :
       PAGINA_ARTIGO;
     const tipo = rota.endsWith('.svg') ? 'image/svg+xml' : 'text/html; charset=utf-8';
     res.setHeader('Content-Type', tipo);

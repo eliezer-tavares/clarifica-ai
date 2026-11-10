@@ -48,7 +48,7 @@ O bloco abaixo é a única fonte autorizada de versões. Ele é **lido por teste
       "quantizacao": "int8 (quantized: true)",
       "tamanho_aproximado": "~45 MB",
       "revisao_verificada_em": "2026-11-09",
-      "nota": "versão multilíngue (não .en): o idioma do áudio é detectado pelo próprio modelo — vídeos e podcasts em qualquer língua; a entrada chega como PCM mono 16 kHz reamostrado na página"
+      "nota": "versão multilíngue (não .en): o idioma do áudio é detectado pelo próprio modelo — vídeos e podcasts em qualquer língua; a entrada chega como PCM mono 16 kHz reamostrado na página. Desde a v1.4.0 o mesmo modelo atende as legendas ao vivo (janelas de 7 s com sobreposição, no documento offscreen) e a tradução para inglês pela opção task: 'translate' do pipeline — nenhum modelo novo nesta frente"
     },
     "ocr": {
       "id": "Xenova/trocr-small-printed",
@@ -101,6 +101,8 @@ O bloco abaixo é a única fonte autorizada de versões. Ele é **lido por teste
 O teste `tests/versoes-modelos.test.js` lê o registry deste arquivo e confronta todos os artefatos acima (incluindo a presença e a integridade dos binários vendados). Qualquer divergência quebra o CI **antes** de uma inconsistência chegar ao usuário.
 
 > **v1.3.0 — registry sobe para 3 (Áudio e Multimodal):** três modelos novos entram por este registry, na revisão fixada e auditada por inferência real: `Xenova/whisper-tiny` (transcrição de áudio 16 kHz de vídeos e podcasts), `Xenova/trocr-small-printed` (OCR de texto impresso aplicado como alt/aria-label) e `Xenova/opus-mt-en-ROMANCE` (tradução EN→PT com destino fixado por `>>pt<<`). A leitura em voz alta NÃO adiciona modelo: usa a Web Speech API (vozes do sistema), decisão declarada no próprio registry (`tts`). A chave de cache do CI mudou em lockstep (agora embute os 5 SHAs) e o total de pesos sobe de ~580 MB para ~800 MB — README e `ci.yml` atualizados na mesma revisão.
+>
+> **v1.4.0 — NENHUM modelo novo, registry permanece em 3 (Legendas ao Vivo e Bilinguismo):** a release de acessibilidade audiovisual cresce em CÓDIGO (documento offscreen, captura de aba, módulo de lógica pura `clarifica-puro.js`, verificador WCAG 1.2.2 — cerca de 300 linhas), não em pesos. O `whisper-tiny` já fixado passa a atender também as legendas ao vivo (janelas de 7 s com sobreposição de 1 s no documento offscreen, task transcribe/traduzir por opção de mensagem) — a opção de tradução usa a task `translate` do próprio pipeline de reconhecimento de fala (fala em qualquer idioma detectado → texto em inglês), sem download novo; quem já usou a transcrição baixa ZERO bytes. A qualidade da tradução pelo modelo tiny é declarada como aproximada; migrar para `whisper-base` no futuro segue o procedimento de upgrade da seção 4 (e mudaria a chave de cache do CI). A chave de cache NÃO mudou nesta release (SHAs inalterados).
 
 ## 3. Por que fixar (as quatro razões)
 

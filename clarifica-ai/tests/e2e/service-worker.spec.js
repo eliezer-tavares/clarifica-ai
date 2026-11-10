@@ -13,17 +13,24 @@
 
 import { test, expect } from '@playwright/test';
 import { iniciarServidor } from './servidor.js';
-import { iniciarNavegadorComExtensao } from './auxiliar.js';
+import { iniciarNavegadorComExtensao, instalarGravadorDeAnuncios, anunciosGravados } from './auxiliar.js';
 
 let servidor;
 let navegador;
 let pagina;
 
 test.beforeAll(async () => {
+  // Lançamento a frio do Chromium pode exceder o teto herdado de 45 s em
+  // máquinas carregadas — test.setTimeout DENTRO de beforeAll altera o
+  // timeout DO HOOK (documentação oficial do Playwright), não dos testes.
+  test.setTimeout(120000);
   servidor = await iniciarServidor();
   navegador = await iniciarNavegadorComExtensao();
   const aberta = await navegador.abrirPaginaDeTeste(`${servidor.url}/artigo`);
   pagina = aberta.pagina;
+  // Gravador de anúncios: o anúncio do SW é transitório (removido após
+  // 5 s — background.js); a asserção lê o registro, imune à velocidade.
+  await instalarGravadorDeAnuncios(pagina);
 });
 
 test.afterAll(async () => {
@@ -55,20 +62,22 @@ test('atalho Ctrl+Shift+L: anúncio aria-live assertivo + Leitura Essencial na p
   await pagina.bringToFront();
   await acionarAtalhoNoServiceWorker('apply-leitura-essencial');
 
+  // O anúncio do SW é TRANSIENTE (removido após 5 s — background.js):
+  // papel, aria-live e texto vêm do REGISTRO do gravador (MutationObserver
+  // instalado no beforeAll) — leitura do nó vivo era corrida em máquinas
+  // carregadas. O efeito persistente (ARIA, foco) continua lido do DOM.
+  const anuncios = await anunciosGravados(pagina);
+  const anuncio = anuncios.find((a) => a.texto === 'Clarifica.ai: Modo Leitura Essencial ativado. Ruídos silenciados.');
+
   const estado = await pagina.evaluate(() => ({
-    anuncio: {
-      texto: document.getElementById('clarifica-anuncio')?.textContent || '',
-      papel: document.getElementById('clarifica-anuncio')?.getAttribute('role'),
-      vivo: document.getElementById('clarifica-anuncio')?.getAttribute('aria-live')
-    },
     navOculta: document.querySelector('nav')?.getAttribute('aria-hidden'),
     navInerte: document.querySelector('nav')?.hasAttribute('inert'),
     foco: document.activeElement?.tagName
   }));
 
-  expect(estado.anuncio.texto).toBe('Clarifica.ai: Modo Leitura Essencial ativado. Ruídos silenciados.');
-  expect(estado.anuncio.papel).toBe('status');
-  expect(estado.anuncio.vivo).toBe('assertive');
+  expect(anuncio, 'anúncio registrado para leitor de tela (região transitiva por design)').toBeTruthy();
+  expect(anuncio.papel).toBe('status');
+  expect(anuncio.vivo).toBe('assertive');
   expect(estado.navOculta).toBe('true');
   expect(estado.navInerte).toBe(true);
   expect(estado.foco).toBe('MAIN');

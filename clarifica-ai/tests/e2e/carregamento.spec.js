@@ -13,6 +13,11 @@ let servidor;
 let navegador;
 
 test.beforeAll(async () => {
+  // Lançamento a frio do Chromium (download recente, varredura do
+  // antivírus, criação de perfil) pode exceder o teto herdado de 45 s em
+  // máquinas carregadas — test.setTimeout DENTRO de beforeAll altera o
+  // timeout DO HOOK (documentação oficial do Playwright), não dos testes.
+  test.setTimeout(120000);
   servidor = await iniciarServidor();
   navegador = await iniciarNavegadorComExtensao();
 });
@@ -28,10 +33,10 @@ test('manifest aceito pelo Chrome real: service worker MV3 registrado', async ()
   expect(url).toMatch(/\/background\.js$/);
 });
 
-test('popup abre como página real: 13 botões, barra de status aria-live e zero erros de console', async () => {
+test('popup abre como página real: 15 botões, barra de status aria-live e zero erros de console', async () => {
   const { popup } = navegador;
 
-  await expect(popup.locator('.mode-btn')).toHaveCount(13);
+  await expect(popup.locator('.mode-btn')).toHaveCount(15);
 
   const status = popup.locator('#status');
   await expect(status).toHaveAttribute('role', 'status');
@@ -57,6 +62,17 @@ test('popup abre como página real: 13 botões, barra de status aria-live e zero
   expect(rotulos.some((t) => /Traduzir Seleção/.test(t))).toBe(true);
   expect(rotulos.some((t) => /Ler em Voz Alta/.test(t))).toBe(true);
   await expect(popup.locator('.mode-btn[data-mode="voz"]')).toHaveAttribute('aria-pressed', 'false');
+
+  // Novidades da v1.4.0 — Legendas ao Vivo — presentes no popup real:
+  // toggle com aria-pressed, verificador WCAG 1.2.2 e seletor de idioma
+  // com as duas tarefas do Whisper (original × inglês).
+  expect(rotulos.some((t) => /Legendas ao Vivo/.test(t))).toBe(true);
+  expect(rotulos.some((t) => /Verificar legendas/.test(t))).toBe(true);
+  await expect(popup.locator('.mode-btn[data-mode="legendas"]')).toHaveAttribute('aria-pressed', 'false');
+  const seletor = popup.locator('#idioma-legendas');
+  await expect(seletor).toHaveCount(1);
+  expect(await seletor.locator('option').allTextContents()).toHaveLength(2);
+  await expect(seletor).toHaveValue('original');
 
   // Novidades da v1.1 presentes no popup real: slider de intensidade e
   // botão de tema (rotulado, i18n pt-BR aplicado pelo Chrome).

@@ -220,6 +220,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const slider = document.getElementById('intensidade');
   const sliderValor = document.getElementById('intensidade-valor');
   const btnTema = document.getElementById('btn-tema');
+  // Legendas ao vivo (v1.4.0): seletor de idioma das legendas (original ×
+  // inglês por tradução) — alterna a tarefa do pipeline Whisper.
+  const idiomaLegendasEl = document.getElementById('idioma-legendas');
 
   const TIPOS_FILTRO = ['protanopia', 'deuteranopia', 'tritanopia'];
   // Códigos de erro que atravessam a fronteira página↔popup (a página
@@ -243,7 +246,12 @@ document.addEventListener('DOMContentLoaded', () => {
     'erro-traducao': 'statusErroTraducao',
     'selecao-vazia': 'statusSelecaoVazia',
     'tts-indisponivel': 'statusTtsIndisponivel',
-    'sem-texto-voz': 'statusSemTextoVoz'
+    'sem-texto-voz': 'statusSemTextoVoz',
+    // Legendas ao vivo (v1.4.0): códigos da fronteira captura/offscreen.
+    'captura-negada': 'statusCapturaNegada',
+    'aba-sem-midia': 'statusAbaSemMidia',
+    'captura-encerrada': 'statusCapturaEncerrada',
+    'falha-legendas': 'statusFalhaLegendas'
   };
   const CICLO_TEMA = ['auto', 'claro', 'escuro'];
 
@@ -263,7 +271,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   async function carregarConfig() {
     try {
-      const cfg = await chrome.storage.local.get({ tema: 'auto', intensidade: 100, ultimoFiltro: null, perfilAtivo: null });
+      const cfg = await chrome.storage.local.get({ tema: 'auto', intensidade: 100, ultimoFiltro: null, perfilAtivo: null, legendasAtivas: false, legendasIdioma: 'original' });
       aplicarTema(cfg.tema);
       definirIntensidade(cfg.intensidade);
       if (TIPOS_FILTRO.includes(cfg.ultimoFiltro)) destacarFiltro(cfg.ultimoFiltro);
@@ -271,6 +279,11 @@ document.addEventListener('DOMContentLoaded', () => {
       // restaurado ao reabrir o popup (o efeito na página é por visita,
       // como nos filtros — reativar é um clique).
       if (TIPOS_PERFIL.includes(cfg.perfilAtivo)) destacarPerfil(cfg.perfilAtivo);
+      // Legendas ao vivo (v1.4.0): o toggle e o seletor de idioma refletem
+      // o estado real da captura (que continua no offscreen mesmo com o
+      // popup fechado — o storage é publicado pelo service worker).
+      idiomaLegendasEl.value = cfg.legendasIdioma === 'ingles' ? 'ingles' : 'original';
+      marcarLegendas(!!cfg.legendasAtivas);
     } catch (e) { /* mantém os padrões */ }
   }
 
@@ -313,6 +326,43 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.classList.toggle('ativo', !!falando);
     btn.setAttribute('aria-pressed', falando ? 'true' : 'false');
   }
+
+  // ---- Legendas ao vivo (v1.4.0) ----
+  // Mesmo padrão de toggle da voz: aria-pressed reflete o estado real da
+  // captura (fonte de verdade: resposta do service worker + storage).
+  function marcarLegendas(ativo) {
+    const btn = document.querySelector('.mode-btn[data-mode="legendas"]');
+    if (!btn) return;
+    btn.classList.toggle('ativo', !!ativo);
+    btn.setAttribute('aria-pressed', ativo ? 'true' : 'false');
+  }
+
+  // Mensagens ao service worker: o chrome.runtime.sendMessage é
+  // encapsulado para que ausência da API (testes em Node) e promessas
+  // rejeitadas (popup sem background disponível) virem SEMPRE um
+  // objeto-resposta com código de erro — nunca exceção na UI.
+  async function enviarRuntime(mensagem) {
+    try {
+      if (!chrome.runtime || typeof chrome.runtime.sendMessage !== 'function') {
+        return { error: 'falha-legendas' };
+      }
+      return await chrome.runtime.sendMessage(mensagem);
+    } catch (e) {
+      return { error: 'falha-legendas' };
+    }
+  }
+
+  // Teto geral das mensagens de legendas: APIs de captura podem ficar
+  // pendentes em ambientes limitados — a UI nunca fica presa em
+  // "Iniciando..." (comTeto correspondente vive no service worker).
+  function enviarRuntimeComTeto(mensagem, tetoMs = 15000) {
+    return Promise.race([
+      enviarRuntime(mensagem),
+      new Promise((resolve) => setTimeout(() => resolve({ error: 'falha-legendas' }), tetoMs))
+    ]);
+  }
+
+  let transcriptAoVivo = [];
 
   async function desligarPerfil() {
     const r = await enviarParaContent('perfil-desligar');
@@ -471,6 +521,62 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         else statusEl.textContent = mensagem('statusSemResposta');
       }
+      else if (mode === 'legendas') {
+        // Toggle das legendas ao vivo (v1.4.0): a captura vive no service
+        // worker/offscreen — ligar e desligar são mensagens de runtime, e
+        // o gesto do usuário (este clique) habilita a captura da aba.
+        const ativo = btn.getAttribute('aria-pressed') === 'true';
+        if (ativo) {
+          const r = await enviarRuntimeComTeto({ target: 'background', type: 'clarifica-legendas', action: 'parar' });
+          marcarLegendas(false);
+          await salvarConfig({ legendasAtivas: false });
+          statusEl.textContent = (r && r.error && r.error !== 'falha-legendas') ? textoDeErro(r.error) : mensagem('statusLegendasParadas');
+        } else {
+          statusEl.textContent = mensagem('statusLegendasIniciando');
+          transcriptAoVivo = [];
+          let r = await enviarRuntimeComTeto({ target: 'background', type: 'clarifica-legendas', action: 'iniciar', idioma: idiomaLegendasEl.value });
+          // Fallback do plano de risco (M1): o getMediaStreamId do service
+          // worker pode ser recusado em algumas configurações — o popup é
+          // também página de extensão com gesto; tenta obter o
+          // identificador aqui e re-enviar com streamId.
+          if (r && r.error === 'captura-negada' && chrome.tabCapture && typeof chrome.tabCapture.getMediaStreamId === 'function') {
+            try {
+              const streamId = await Promise.race([
+                chrome.tabCapture.getMediaStreamId(),
+                new Promise((_, recusar) => setTimeout(() => recusar(new Error('teto-tempo')), 5000))
+              ]);
+              r = await enviarRuntimeComTeto({ target: 'background', type: 'clarifica-legendas', action: 'iniciar', idioma: idiomaLegendasEl.value, streamId });
+            } catch (e) { /* mantém o erro original traduzido */ }
+          }
+          if (r && r.error) {
+            statusEl.textContent = textoDeErro(r.error);
+            marcarLegendas(false);
+            await salvarConfig({ legendasAtivas: false });
+          } else if (r && r.success) {
+            marcarLegendas(true);
+            await salvarConfig({ legendasAtivas: true, legendasIdioma: idiomaLegendasEl.value });
+            statusEl.textContent = mensagem('statusLegendasAtivas');
+          } else {
+            statusEl.textContent = mensagem('statusSemResposta');
+            marcarLegendas(false);
+          }
+        }
+      }
+      else if (mode === 'verificar-legendas') {
+        // Verificador mínimo do critério WCAG 1.2.2 (v1.4.0): leitura
+        // pura dos <video> da página — sem IA, sem rede. O resultado com
+        // contagens é produzido pela função pura DENTRO da página
+        // (auditoriaLegendas, fonte canônica em clarifica-puro.js).
+        const resultado = await enviarParaContent('auditar-legendas');
+        if (resultado?.error) statusEl.textContent = textoDeErro(resultado.error);
+        else if (resultado && resultado.auditoria) {
+          const a = resultado.auditoria;
+          if (!a.total) statusEl.textContent = mensagem('statusAuditoriaSemVideo');
+          else if (a.semLegenda === 0) statusEl.textContent = mensagem('statusAuditoriaLegendasOk', [String(a.total)]);
+          else statusEl.textContent = mensagem('statusAuditoriaLegendas', [String(a.semLegenda), String(a.total)]);
+        }
+        else statusEl.textContent = mensagem('statusSemResposta');
+      }
       else if (TIPOS_FILTRO.includes(mode)) {
         await aplicarFiltro(mode);
       }
@@ -486,6 +592,49 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('close-result').addEventListener('click', () => {
     resultArea.classList.add('hidden');
     statusEl.textContent = mensagem('statusPronto');
+  });
+
+  // ---- Legendas ao vivo (v1.4.0) — transmissão ao vivo no popup ----
+  // Cada transcrição parcial cruza a fronteira como broadcast único
+  // ('legenda-pronta'): o service worker consome para ENTREGAR NA PÁGINA
+  // e o popup consome para o transcript ao vivo (essencial em páginas com
+  // apenas <audio>, onde não há track na página). O popup também reage a
+  // encerramentos externos (navegação, fim do fluxo). Guardas de API.
+  try {
+    chrome.runtime.onMessage.addListener((evento) => {
+      if (!evento || typeof evento !== 'object') return;
+      if (evento.type === 'legenda-pronta' && typeof evento.texto === 'string' && evento.texto.trim()) {
+        transcriptAoVivo.push(evento.texto.trim());
+        if (transcriptAoVivo.length > 200) transcriptAoVivo.splice(0, transcriptAoVivo.length - 200);
+        aiOutput.textContent = transcriptAoVivo.join(' ');
+        resultArea.classList.remove('hidden');
+        statusEl.textContent = mensagem('statusLegendasAtivas');
+      }
+      if (evento.type === 'clarifica-legendas-estado' && evento.ativo === false && evento.motivo === 'captura-encerrada') {
+        marcarLegendas(false);
+        statusEl.textContent = textoDeErro('captura-encerrada');
+      }
+    });
+  } catch (e) { /* ambiente sem runtime.onMessage (testes) */ }
+
+  // Troca do idioma das legendas: persiste imediatamente e, com legendas
+  // em execução, reinicia a captura com a tarefa nova (transcrever ↔
+  // traduzir) — o Whisper não troca tarefa no fluxo em andamento.
+  idiomaLegendasEl.addEventListener('change', async () => {
+    await salvarConfig({ legendasIdioma: idiomaLegendasEl.value });
+    const btnLegendas = document.querySelector('.mode-btn[data-mode="legendas"]');
+    if (btnLegendas && btnLegendas.getAttribute('aria-pressed') === 'true') {
+      await enviarRuntimeComTeto({ target: 'background', type: 'clarifica-legendas', action: 'parar' });
+      transcriptAoVivo = [];
+      const r = await enviarRuntimeComTeto({ target: 'background', type: 'clarifica-legendas', action: 'iniciar', idioma: idiomaLegendasEl.value });
+      if (r && r.error) {
+        marcarLegendas(false);
+        await salvarConfig({ legendasAtivas: false });
+        statusEl.textContent = textoDeErro(r.error);
+      } else {
+        statusEl.textContent = mensagem('statusLegendasAtivas');
+      }
+    }
   });
 
   carregarMensagens()
@@ -877,6 +1026,49 @@ document.addEventListener('DOMContentLoaded', () => {
         // cross-origin sem CORS — o usuário recebe uma mensagem clara.
         return { error: 'media-bloqueado' };
       }
+    }
+
+    if (acao === 'auditar-legendas') {
+      // Verificador mínimo do critério WCAG 1.2.2 (v1.4.0): inventaria os
+      // <video> da página e conta quantos possuem <track kind="captions">
+      // ou kind="subtitles" (via DOM e via API textTracks). Sem IA e sem
+      // rede — leitura pura de estado, reutilizada pelo fluxo de ação
+      // ("auditar e agir") do plano da v1.4.0.
+      // === INÍCIO DA LÓGICA PURA DE AUDITORIA DE LEGENDAS (v1.4.0: fonte
+      // canônica em scripts/clarifica-puro.js; paridade garantida por
+      // tests/legendas.test.js) ===
+      function auditoriaLegendas(descritores) {
+        const lista = Array.isArray(descritores) ? descritores : [];
+        const detalhes = lista.map((descritor, indice) => {
+          const temCaptions = !!(descritor && descritor.temCaptions);
+          const temSubtitles = !!(descritor && descritor.temSubtitles);
+          return { indice, temCaptions, temSubtitles, comLegendas: temCaptions || temSubtitles };
+        });
+        const comLegendas = detalhes.filter((d) => d.comLegendas).length;
+        return {
+          total: lista.length,
+          comLegendas,
+          semLegenda: lista.length - comLegendas,
+          detalhes
+        };
+      }
+      // === FIM DA LÓGICA PURA DE AUDITORIA DE LEGENDAS ===
+      const descritores = Array.from(document.querySelectorAll('video')).map((video) => {
+        const faixas = Array.from(video.querySelectorAll('track'));
+        const tipoDe = (t) => String(t.getAttribute('kind') || '').toLowerCase();
+        let temCaptions = faixas.some((t) => tipoDe(t) === 'captions');
+        let temSubtitles = faixas.some((t) => tipoDe(t) === 'subtitles');
+        try {
+          if (video.textTracks) {
+            for (const faixa of video.textTracks) {
+              if (faixa.kind === 'captions') temCaptions = true;
+              if (faixa.kind === 'subtitles') temSubtitles = true;
+            }
+          }
+        } catch (e) { /* textTracks indisponível: segue com o DOM */ }
+        return { temCaptions, temSubtitles };
+      });
+      return { descritores, auditoria: auditoriaLegendas(descritores) };
     }
 
     if (acao === 'ocr-imagens') {

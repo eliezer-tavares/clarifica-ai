@@ -49,7 +49,20 @@
       <button class="mode-btn midia" data-mode="ocr" aria-pressed="false">__MSG_btnOcr__</button>
       <button class="mode-btn midia" data-mode="traduzir" aria-pressed="false">__MSG_btnTraduzir__</button>
       <button class="mode-btn midia" data-mode="voz" aria-pressed="false">__MSG_btnLerVozAlta__</button>
+      <!-- Legendas ao vivo (v1.4.0): toggle com aria-pressed (captura da aba,
+           Whisper local, WebVTT sobre o vídeo). O seletor abaixo alterna a
+           tarefa do Whisper: original (transcrição) ou inglês (tradução). -->
+      <button class="mode-btn midia" data-mode="legendas" aria-pressed="false">__MSG_btnLegendasAoVivo__</button>
+      <button class="mode-btn midia" data-mode="verificar-legendas">__MSG_btnVerificarLegendas__</button>
     </div>
+    <div class="selector-row">
+      <label for="idioma-legendas">__MSG_labelIdiomaLegendas__</label>
+      <select id="idioma-legendas">
+        <option value="original">__MSG_idiomaLegendaOriginal__</option>
+        <option value="ingles">__MSG_idiomaLegendaIngles__</option>
+      </select>
+    </div>
+    <p class="nota-legendas">__MSG_notaLegendasAtraso__</p>
 
     <div id="result-area" class="hidden">
       <h3>__MSG_tituloResultado__</h3>

@@ -82,4 +82,47 @@ async function iniciarNavegadorComExtensao() {
   return { context, serviceWorker, idExtensao, urlPopup, popup, erros, abrirPaginaDeTeste };
 }
 
-module.exports = { RAIZ_EXTENSAO, iniciarNavegadorComExtensao };
+// ---- Gravador de anúncios (a região aria-live é TRANSIENTE por design) ----
+//
+// O anúncio na página é removido após alguns segundos — popup.js remove
+// `.clarifica-anuncio` após 3 s e background.js remove `#clarifica-anuncio`
+// após 5 s — para não empilhar regiões assertive (WCAG 4.1.3). Uma
+// asserção que LÊ o nó vivo corre contra esse relógio: em máquinas
+// carregadas, a leitura pode chegar depois da remoção e ver string vazia
+// (falso negativo observado na validação de release). O gravador registra
+// cada anúncio NO MOMENTO em que entra no DOM (MutationObserver instalado
+// ANTES da ação) e a asserção lê o REGISTRO — determinístico em qualquer
+// velocidade de máquina. O DOM é compartilhado entre os mundos MAIN e
+// isolado do chrome.scripting, então adições feitas pelas funções
+// injetadas são vistas pelo observador em qualquer um deles.
+async function instalarGravadorDeAnuncios(pagina) {
+  await pagina.evaluate(() => {
+    if (window.__anunciosClarifica) return; // idempotente por página
+    window.__anunciosClarifica = [];
+    const registrar = () => {
+      document
+        .querySelectorAll('.clarifica-anuncio, #clarifica-anuncio')
+        .forEach((n) => {
+          const texto = (n.textContent || '').trim();
+          if (!texto) return;
+          if (window.__anunciosClarifica.some((a) => a.texto === texto)) return;
+          window.__anunciosClarifica.push({
+            texto,
+            papel: n.getAttribute('role'),
+            vivo: n.getAttribute('aria-live')
+          });
+        });
+    };
+    new MutationObserver(registrar).observe(document.documentElement, {
+      childList: true,
+      subtree: true
+    });
+    registrar(); // anúncios pré-existentes, se houver
+  });
+}
+
+async function anunciosGravados(pagina) {
+  return pagina.evaluate(() => window.__anunciosClarifica || []);
+}
+
+module.exports = { RAIZ_EXTENSAO, iniciarNavegadorComExtensao, instalarGravadorDeAnuncios, anunciosGravados };

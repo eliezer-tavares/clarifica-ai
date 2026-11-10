@@ -89,5 +89,29 @@
     "placeholders": { "quantidade": { "content": "$1" } }
   },
   "anuncioTraducaoConcluida": { "message": "Clarifica.ai: Tradução concluída." },
-  "anuncioTraducao": { "message": "Clarifica.ai: Traduzindo o trecho selecionado." }
+  "anuncioTraducao": { "message": "Clarifica.ai: Traduzindo o trecho selecionado." },
+  "btnLegendasAoVivo": { "message": "💬 Legendas ao Vivo (CC)" },
+  "btnVerificarLegendas": { "message": "🔍 Verificar legendas (WCAG 1.2.2)" },
+  "labelIdiomaLegendas": { "message": "Idioma das legendas" },
+  "idiomaLegendaOriginal": { "message": "Original (idioma da fala)" },
+  "idiomaLegendaIngles": { "message": "Inglês (tradução)" },
+  "notaLegendasAtraso": { "message": "Legendas geradas no dispositivo (100% local) e aproximadas em tempo real: chegam com atraso típico de 5 a 15 segundos." },
+  "statusLegendasIniciando": { "message": "Iniciando legendas ao vivo..." },
+  "statusLegendasAtivas": { "message": "Legendas ativas — captando o áudio da aba." },
+  "statusLegendasParadas": { "message": "Legendas ao vivo paradas." },
+  "statusCapturaNegada": { "message": "Não foi possível capturar o áudio da aba (permissão negada)." },
+  "statusAbaSemMidia": { "message": "Esta aba não permite captura de áudio (páginas internas do navegador não são suportadas)." },
+  "statusCapturaEncerrada": { "message": "Captura encerrada: a página navegou ou o áudio terminou." },
+  "statusFalhaLegendas": { "message": "Falha ao iniciar as legendas ao vivo." },
+  "statusAuditoriaLegendas": {
+    "message": "Auditoria WCAG 1.2.2: $sem$ de $total$ vídeos sem legendas. Use as Legendas ao Vivo para gerá-las.",
+    "placeholders": { "sem": { "content": "$1" }, "total": { "content": "$2" } }
+  },
+  "statusAuditoriaLegendasOk": {
+    "message": "Todos os $total$ vídeos da página têm legendas.",
+    "placeholders": { "total": { "content": "$1" } }
+  },
+  "statusAuditoriaSemVideo": { "message": "Nenhum vídeo na página para auditar." },
+  "anuncioLegendasNaPagina": { "message": "Clarifica.ai: Legendas ao vivo ativadas — captando o áudio da aba." },
+  "chipLegendasAtivas": { "message": "Legendas ativas — captando áudio" }
 }

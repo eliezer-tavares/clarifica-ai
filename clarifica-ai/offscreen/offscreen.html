@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Clarifica.ai — captura de áudio (legendas ao vivo)</title>
+</head>
+<body>
+  <!-- Documento offscreen do Clarifica.ai (v1.4.0).
+       Único contexto da extensão autorizado a trocar o identificador de
+       fluxo do tabCapture por um MediaStream e a rodar um AudioContext
+       dedicado — o service worker não tem DOM nem APIs de mídia.
+       A lógica vive em offscreen.js (módulo ES). -->
+  <script type="module" src="offscreen.js"></script>
+</body>
+</html>

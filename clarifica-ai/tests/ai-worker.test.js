@@ -218,6 +218,26 @@ test('reuso REAL da transcrição: segunda chamada não recarrega o modelo', asy
   assert.ok(transcricao && String(transcricao.transcript).trim().length > 0, 'segunda inferência real concluída');
 });
 
+test('tarefa de TRADUÇÃO do Whisper REAL (v1.4.0): opcoes.tarefa=traduzir executa task:translate sem quebrar o pipeline', async () => {
+  // A opção de bilinguismo das legendas atravessa o protocolo de mensagens
+  // e ativa a task 'translate' do Whisper — fala em qualquer idioma →
+  // texto em inglês. Inferência real (mesmo modelo, nenhuma dependência
+  // nova): o caminho exato do recurso de legendas em inglês.
+  const { mensagens } = await workerReal();
+  await self.onmessage({
+    data: {
+      type: 'transcribe-audio',
+      data: audioJfk16k().subarray(0, 80000), // 5 s
+      opcoes: { tarefa: 'traduzir' }
+    }
+  });
+  assert.ok(!mensagens.some((m) => m.type === 'status' && /Carregando/.test(m.message)), 'mesma instância do modelo (sem recarregar)');
+  assert.equal(mensagens.some((m) => m.type === 'error'), false, 'task translate não quebra o pipeline da 2.14.0');
+  const transcricao = mensagens.find((m) => m.type === 'transcription');
+  assert.ok(transcricao && String(transcricao.transcript).trim().length > 0,
+    'saída de legendas produzida pela inferência real: ' + String(transcricao && transcricao.transcript).slice(0, 120));
+});
+
 test('OCR REAL: worker carrega Xenova/trocr-small-printed e extrai o texto impresso da imagem', async () => {
   const { mensagens } = await workerReal();
   const urlImagem = await urlFixture('/texto-ocr.png');
