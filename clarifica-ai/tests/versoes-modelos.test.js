@@ -25,8 +25,8 @@ const registry = (() => {
   return JSON.parse(bloco[1]);
 })();
 
-test('registry v3 declara a biblioteca vendada e os cinco modelos com revisão (SHA) fixada', () => {
-  assert.equal(registry.registry_versao, 3);
+test('registry v4 declara a biblioteca vendada e os seis modelos com revisão (SHA) fixada', () => {
+  assert.equal(registry.registry_versao, 4);
   assert.match(registry.transformers_js.versao, /^\d+\.\d+\.\d+$/, 'versão semântica da biblioteca');
   assert.equal(registry.transformers_js.origem, 'pacote vendado (sem CDN)');
   assert.equal(registry.transformers_js.arquivo_local, 'vendor/transformers.min.js');
@@ -42,9 +42,12 @@ test('registry v3 declara a biblioteca vendada e os cinco modelos com revisão (
   assert.ok(registry.modelos.sumarizacao && registry.modelos.visao, 'registry cobre os dois modelos originais');
   assert.ok(registry.modelos.transcricao && registry.modelos.ocr && registry.modelos.traducao,
     'registry cobre os três modelos novos da v1.3.0 (transcrição, OCR, tradução)');
+  assert.ok(registry.modelos.perguntas,
+    'registry cobre o modelo de perguntas e respostas da v2.0.0 (QA extrativo)');
+  assert.equal(registry.modelos.perguntas.tarefa, 'question-answering', 'tarefa do QA é question-answering');
 });
 
-test('registry v3 declara a TTS como Web Speech API — vozes do sistema, sem modelo nem download', () => {
+test('registry v4 declara a TTS como Web Speech API — vozes do sistema, sem modelo nem download', () => {
   assert.ok(registry.tts, 'registro de TTS presente fora do bloco de modelos');
   assert.match(registry.tts.tecnologia, /Web Speech API/);
   assert.match(registry.tts.origem, /sistema/i);

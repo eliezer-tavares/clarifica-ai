@@ -1,0 +1,37 @@
+{
+  "manifest_version": 2,
+  "name": "Clarifica.ai",
+  "version": "2.0.0",
+  "default_locale": "pt_BR",
+  "description": "Acessibilidade universal com Edge AI: perguntas e respostas, resumos em português, descrição de imagens, transcrição, OCR, tradução e auditoria WCAG, 100% offline.",
+  "author": "contact@eliezertavaresdeoliveira.com",
+  "homepage_url": "https://github.com/eliezer-tavares/clarifica-ai",
+  "icons": { "128": "assets/icon.png" },
+  "browser_action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": { "128": "assets/icon.png" }
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "clarifica-ai@eliezertavaresdeoliveira.com",
+      "strict_min_version": "115.0"
+    }
+  },
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": false
+  },
+  "commands": {
+    "toggle-resumo": { "suggested_key": { "default": "Ctrl+Shift+R" }, "description": "Resumir página com IA" },
+    "toggle-leitura": { "suggested_key": { "default": "Ctrl+Shift+L" }, "description": "Modo Leitura Essencial (NVDA/JAWS)" },
+    "toggle-imagens": { "suggested_key": { "default": "Ctrl+Shift+A" }, "description": "Descrever imagens da página" },
+    "toggle-reset": { "suggested_key": { "default": "Ctrl+Shift+X" }, "description": "Restaurar página original" },
+    "traduzir-selecao": { "description": "Traduzir o trecho selecionado (EN → PT)" }
+  },
+  "permissions": ["activeTab", "scripting", "storage", "<all_urls>"],
+  "web_accessible_resources": [
+    "scripts/ai-worker.js",
+    "vendor/*"
+  ],
+  "content_security_policy": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+}

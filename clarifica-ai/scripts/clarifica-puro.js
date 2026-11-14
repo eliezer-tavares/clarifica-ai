@@ -153,6 +153,107 @@ function auditoriaLegendas(descritores) {
 
 // === FIM DA LÓGICA PURA DE LEGENDAS ===
 
+// === INÍCIO DA LÓGICA PURA DE AUDITORIA WCAG (v2.0.0: exercitada em Node por
+// auditoria.test.js — sem DOM, sem chrome.*, sem rede) ===
+//
+// Painel de auditoria de acessibilidade em tempo real: a COLETA de dados
+// na página (funções injetadas) extrai descritores planos; o JULGAMENTO
+// (quais critérios WCAG são violados e com que gravidade) vive aqui —
+// mesmo contrato das legendas: código idêntico em Node e no navegador,
+// com cópias inline marcadas no popup.js e paridade garantida por teste.
+
+// Textos de âncora que não descrevem o destino (WCAG 2.4.4 — Purpose of
+// Links). Lista fechada e minúscula; o texto chega já normalizado.
+const TEXTOS_LINK_GENERICOS = [
+  'clique aqui', 'aqui', 'leia mais', 'saiba mais', 'continue lendo',
+  'ver mais', 'mais', 'link', 'click here', 'here', 'read more', 'more',
+  'learn more', 'this link', 'link para', 'link para:'
+];
+
+function ehTextoLinkGenerico(texto) {
+  const t = String(texto || '').trim().toLowerCase();
+  if (!t) return false;
+  return TEXTOS_LINK_GENERICOS.includes(t);
+}
+
+// Pulo de nível de título (ex.: h1 → h4) viola a ordem hierárquica esperada
+// por leitores de tela (WCAG 1.3.1 — Info and Relationships). O PRIMEIRO
+// título da página pode ser h1 OU h2 (padrão comum e legítimo); só os
+// saltos para baixo de mais de um nível são sinalizados. Retorna true no
+// primeiro salto encontrado (uma ocorrência basta para o achado).
+function headingsForaDeOrdem(niveis) {
+  const lista = Array.isArray(niveis) ? niveis.map((n) => Number(n)).filter((n) => n >= 1 && n <= 6) : [];
+  let anterior = 0;
+  for (const nivel of lista) {
+    if (anterior > 0 && nivel > anterior + 1) return true;
+    anterior = nivel;
+  }
+  return false;
+}
+
+// Auditoria completa: recebe os descritores coletados na página e devolve
+// os achados por critério, com contagem, mensagem (CHAVE i18n — a página
+// resolve com strings já traduzidas, como em todo o produto) e dica de
+// ação. Sem IA e sem rede: leitura pura de estado, executada a cada
+// mutação relevante da página (painel em tempo real).
+function auditarAcessibilidade(descritores) {
+  const d = descritores && typeof descritores === 'object' ? descritores : {};
+  const imagens = Array.isArray(d.imagens) ? d.imagens : [];
+  const controles = Array.isArray(d.controles) ? d.controles : [];
+  const links = Array.isArray(d.links) ? d.links : [];
+  const iframes = Array.isArray(d.iframes) ? d.iframes : [];
+  const videos = Array.isArray(d.videos) ? d.videos : [];
+  const achados = [];
+
+  const imagensSemAlt = imagens.filter((img) => img && !img.temAlt).length;
+  if (imagensSemAlt > 0) {
+    achados.push({ criterio: '1.1.1', chaveMensagem: 'dicaCriterio111', contagem: imagensSemAlt });
+  }
+
+  const legenda = auditoriaLegendas(videos);
+  if (legenda.semLegenda > 0) {
+    achados.push({ criterio: '1.2.2', chaveMensagem: 'dicaCriterio122', contagem: legenda.semLegenda });
+  }
+
+  const controlesSemNome = controles.filter((c) => c && !c.nome).length;
+  if (controlesSemNome > 0) {
+    achados.push({ criterio: '4.1.2', chaveMensagem: 'dicaCriterio412', contagem: controlesSemNome });
+  }
+
+  const genericos = links.filter((texto) => ehTextoLinkGenerico(texto)).length;
+  if (genericos > 0) {
+    achados.push({ criterio: '2.4.4', chaveMensagem: 'dicaCriterio244', contagem: genericos });
+  }
+
+  const iframesSemTitle = iframes.filter((f) => f && !f.temTitle).length;
+  if (iframesSemTitle > 0) {
+    achados.push({ criterio: '2.4.1', chaveMensagem: 'dicaCriterio241', contagem: iframesSemTitle });
+  }
+
+  if (!String(d.htmlLang || '').trim()) {
+    achados.push({ criterio: '3.1.1', chaveMensagem: 'dicaCriterio311', contagem: 1 });
+  }
+
+  if (headingsForaDeOrdem(d.headings)) {
+    achados.push({ criterio: '1.3.1', chaveMensagem: 'dicaCriterio131', contagem: 1 });
+  }
+
+  const totalBarreiras = achados.reduce((soma, a) => soma + a.contagem, 0);
+  return { achados, totalBarreiras, criterios: achados.length };
+}
+
+// Parâmetros de geração do resumo: o modo Português Claro (v2.0.0) favorece
+// frases curtas e ordem direta via geração do MODELO (teto menor de tokens
+// de saída), nunca por regras de reescrita de texto. O padrão é o
+// comportamento da v1.0.0 — a opção é aditiva.
+function parametrosDeGeracao(claro) {
+  return claro === true
+    ? { max_new_tokens: 90, min_new_tokens: 30, do_sample: false }
+    : { max_new_tokens: 150, min_new_tokens: 50, do_sample: false };
+}
+
+// === FIM DA LÓGICA PURA DE AUDITORIA WCAG ===
+
 // Exportação ESM — o documento offscreen (página de extensão) importa as
 // funções diretamente; os testes em Node extraem o bloco marcado acima
 // (padrão css-filters/perfis) e exercitam as MESMAS linhas que o navegador.
@@ -163,5 +264,10 @@ export {
   planoDeJanelas,
   montadorVtt,
   seletorDeVideoAlvo,
-  auditoriaLegendas
+  auditoriaLegendas,
+  TEXTOS_LINK_GENERICOS,
+  ehTextoLinkGenerico,
+  headingsForaDeOrdem,
+  auditarAcessibilidade,
+  parametrosDeGeracao
 };

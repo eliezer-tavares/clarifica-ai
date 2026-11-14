@@ -108,7 +108,7 @@ test('multimodal: reamostrador rejeita entradas vazias/taxas inválidas e aceita
 test('multimodal: seção de áudio com 6 botões nativos, aria-pressed inicial e rotulos pt-BR', async () => {
   const { document } = await setup();
   const botoes = [...document.querySelectorAll('button')];
-  assert.equal(botoes.length, 17, '15 modos (9 anteriores + 4 áudio/multimodal + 2 legendas v1.4.0) + fechar + tema');
+  assert.equal(botoes.length, 19, '17 modos (9 anteriores + 4 áudio/multimodal + 2 legendas v1.4.0 + perguntar e auditoria v2.0.0) + fechar + tema');
   const titulos = [...document.querySelectorAll('.secao-titulo')].map((h) => h.textContent);
   assert.ok(titulos.includes('Áudio e Multimodal'), 'nova seção presente');
   for (const mode of ['transcrever', 'ocr', 'traduzir', 'voz']) {
@@ -173,7 +173,8 @@ test('multimodal: transcrição ignora blob: e data: e usa o primeiro http(s) v�
   document.querySelector('main').appendChild(fonte);
 
   botao(document, 'transcrever').click();
-  await sleep(60);
+  // Espera ATIVA pela criação do Worker em vez de tempo fixo (corrida intermitente).
+  await aguardar(() => Promise.resolve(FakeWorker.instances.length === 1), 3000);
   const worker = FakeWorker.instances[0];
   assert.ok(worker, 'mídia http(s) encontrada via <source>');
   assert.equal(worker.received[0].type, 'transcribe-audio');
@@ -222,14 +223,7 @@ test('multimodal: OCR aplica o texto extraído como alt/aria-label das imagens s
   await sleep(30);
   assert.equal(statusDe(document).textContent, 'Extraindo texto de 2 imagens...', 'quantidade traduzida com placeholder i18n');
 
-  // Espera ATIVA pelo fim do fluxo (Worker encerrado) com teto explícito:
-  // a cadeia completa do OCR (2 postMessages espaçados + 2 respostas do
-  // Worker + terminate) é toda dirigida por temporizadores e, em máquinas
-  // carregadas, ultrapassa o teto padrão de 500 ms — a espera afirmava
-  // entre o 2º postMessage e o processamento das respostas (corrida
-  // intermitente validada em Windows com pouca RAM; mesma lição dos
-  // fluxos de transcrição acima).
-  await aguardar(() => Promise.resolve(FakeWorker.instances[0] && FakeWorker.instances[0].terminated), 3000);
+  await aguardar(() => Promise.resolve(FakeWorker.instances[0] && FakeWorker.instances[0].terminated));
   const worker = FakeWorker.instances[0];
   assert.equal(worker.received.length, 2, 'apenas as imagens sem alt enviadas');
   assert.ok(worker.received.every((m) => m.type === 'ocr-image'));
@@ -244,11 +238,9 @@ test('multimodal: OCR aplica o texto extraído como alt/aria-label das imagens s
   assert.equal(preservada.getAttribute('alt'), 'Logotipo do site', 'alt original preservado');
   assert.equal(preservada.style.border, '', 'imagem com alt não é tocada');
 
-  // Anúncio de conclusão na PÁGINA com a contagem real substituída. O
-  // anúncio é inserido no MESMO bloco síncrono do terminate (popup.js),
-  // mas o teto segue explícito por simetria com a espera anterior.
+  // Anúncio de conclusão na PÁGINA com a contagem real substituída.
   await aguardar(() => Promise.resolve([...document.querySelectorAll('[role="status"][aria-live="assertive"]')]
-    .some((n) => /OCR concluído em 2 imagens\./.test(n.textContent || ''))), 3000);
+    .some((n) => /OCR concluído em 2 imagens\./.test(n.textContent || ''))));
 });
 
 test('multimodal: erro do worker de OCR encerra o Worker (sem zumbi)', async () => {
@@ -261,9 +253,7 @@ test('multimodal: erro do worker de OCR encerra o Worker (sem zumbi)', async () 
   botao(document, 'ocr').click();
   await sleep(30);
   assert.equal(statusDe(document).textContent, 'Extraindo texto de 2 imagens...');
-  // Espera ATIVA pelo encerramento em vez de tempo fixo (mesma correção do
-  // fluxo feliz: a resposta de erro do Worker chega por temporizador e
-  // atrasa em máquinas carregadas — sleep fixo é corrida intermitente).
+  // Espera ATIVA pela mensagem de erro do Worker em vez de tempo fixo.
   await aguardar(() => Promise.resolve(FakeWorker.instances[0] && FakeWorker.instances[0].terminated), 3000);
   assert.equal(FakeWorker.instances[0].terminated, true, 'Worker encerrado na mensagem de erro');
 });
@@ -299,7 +289,10 @@ test('multimodal: tradução envia o trecho selecionado, exibe resultado e anunc
   });
 
   botao(document, 'traduzir').click();
-  await sleep(60);
+  // Espera ATIVA pelo fim do fluxo em vez de tempo fixo (corrida intermitente
+  // em máquinas carregadas — mesma correção de qa/popup).
+  await aguardar(() => Promise.resolve(FakeWorker.instances.length > 0 && FakeWorker.instances[0].terminated), 3000);
+  await aguardar(() => Promise.resolve(statusDe(document).textContent === 'Tradução concluída!'), 3000);
 
   const worker = FakeWorker.instances[0];
   assert.ok(worker, 'Worker criado para a tradução');

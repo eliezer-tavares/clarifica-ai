@@ -223,6 +223,25 @@ document.addEventListener('DOMContentLoaded', () => {
   // Legendas ao vivo (v1.4.0): seletor de idioma das legendas (original ×
   // inglês por tradução) — alterna a tarefa do pipeline Whisper.
   const idiomaLegendasEl = document.getElementById('idioma-legendas');
+  // v2.0.0 — Assistente de perguntas (QA), saída em português com Português
+  // Claro e sincronização de perfis entre páginas e abas.
+  const inputPergunta = document.getElementById('pergunta');
+  const idiomaSaidaEl = document.getElementById('idioma-saida');
+  const claroEl = document.getElementById('claro');
+  const sincronizarEl = document.getElementById('sincronizar');
+
+  // Suporte a Firefox (v2.0.0): chrome.tabCapture e o documento offscreen
+  // não existem no Firefox — as legendas ao vivo ficam indisponíveis e os
+  // controles correspondentes são ocultados (docs/FIREFOX.md). Todos os
+  // demais recursos funcionam no Firefox 115+ via Manifest V2.
+  const ehFirefox = typeof navigator !== 'undefined' && /firefox/i.test(String(navigator.userAgent || ''));
+  if (ehFirefox) {
+    const btnLegendasFF = document.querySelector('.mode-btn[data-mode="legendas"]');
+    if (btnLegendasFF) btnLegendasFF.style.display = 'none';
+    if (idiomaLegendasEl && idiomaLegendasEl.parentElement) idiomaLegendasEl.parentElement.style.display = 'none';
+    const notaLegendasFF = document.querySelector('.nota-legendas');
+    if (notaLegendasFF) notaLegendasFF.style.display = 'none';
+  }
 
   const TIPOS_FILTRO = ['protanopia', 'deuteranopia', 'tritanopia'];
   // Códigos de erro que atravessam a fronteira página↔popup (a página
@@ -251,7 +270,12 @@ document.addEventListener('DOMContentLoaded', () => {
     'captura-negada': 'statusCapturaNegada',
     'aba-sem-midia': 'statusAbaSemMidia',
     'captura-encerrada': 'statusCapturaEncerrada',
-    'falha-legendas': 'statusFalhaLegendas'
+    'falha-legendas': 'statusFalhaLegendas',
+    // v2.0.0: códigos do assistente de perguntas e da sincronização.
+    'pergunta-vazia': 'statusPerguntaVazia',
+    'contexto-curto': 'statusContextoCurto',
+    'erro-qa': 'statusErroQa',
+    'falha-sincronizacao': 'statusFalhaSincronizacao'
   };
   const CICLO_TEMA = ['auto', 'claro', 'escuro'];
 
@@ -271,7 +295,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   async function carregarConfig() {
     try {
-      const cfg = await chrome.storage.local.get({ tema: 'auto', intensidade: 100, ultimoFiltro: null, perfilAtivo: null, legendasAtivas: false, legendasIdioma: 'original' });
+      const cfg = await chrome.storage.local.get({ tema: 'auto', intensidade: 100, ultimoFiltro: null, perfilAtivo: null, legendasAtivas: false, legendasIdioma: 'original', idiomaSaida: 'original', claro: false, sincronizacaoAtiva: true });
       aplicarTema(cfg.tema);
       definirIntensidade(cfg.intensidade);
       if (TIPOS_FILTRO.includes(cfg.ultimoFiltro)) destacarFiltro(cfg.ultimoFiltro);
@@ -284,6 +308,11 @@ document.addEventListener('DOMContentLoaded', () => {
       // popup fechado — o storage é publicado pelo service worker).
       idiomaLegendasEl.value = cfg.legendasIdioma === 'ingles' ? 'ingles' : 'original';
       marcarLegendas(!!cfg.legendasAtivas);
+      // v2.0.0: idioma de saída da IA (original × português), Português
+      // Claro e sincronização de perfis (padrão: ligada).
+      idiomaSaidaEl.value = cfg.idiomaSaida === 'pt' ? 'pt' : 'original';
+      claroEl.checked = cfg.claro === true;
+      sincronizarEl.checked = cfg.sincronizacaoAtiva !== false;
     } catch (e) { /* mantém os padrões */ }
   }
 
@@ -310,10 +339,25 @@ document.addEventListener('DOMContentLoaded', () => {
       statusEl.textContent = mensagem('statusPerfilOk', [nomeTraduzido]);
       destacarPerfil(nome);
       await salvarConfig({ perfilAtivo: nome });
+      await sincronizarOutrasAbas('aplicar');
     } else {
       // A página NÃO recebeu o perfil: a UI não pode afirmar que está ativo.
       statusEl.textContent = (r && r.error) ? textoDeErro(r.error) : mensagem('statusInjecaoErro');
       destacarPerfil(null);
+    }
+  }
+
+  // ---- Sincronização de perfis e filtros (v2.0.0) ----
+  // O estado corrente vive no chrome.storage (fonte única): ao ativar ou
+  // desligar um recurso, o popup pede ao service worker a propagação para
+  // as abas http(s) já abertas (o próprio service worker lê o storage —
+  // o popup não duplica estado). A aplicação em CADA NAVEGAÇÃO é feita
+  // pelo listener chrome.tabs.onUpdated do service worker.
+  async function sincronizarOutrasAbas(action) {
+    if (ehFirefox) return; // sem sync cross-tab no MV2 (suporte básico)
+    const r = await enviarRuntime({ target: 'background', type: 'clarifica-sincronizar', action });
+    if (r && r.error === 'falha-sincronizacao') {
+      statusEl.textContent = textoDeErro('falha-sincronizacao');
     }
   }
 
@@ -370,6 +414,7 @@ document.addEventListener('DOMContentLoaded', () => {
       statusEl.textContent = mensagem('statusPerfilDesligado');
       destacarPerfil(null);
       await salvarConfig({ perfilAtivo: null });
+      await sincronizarOutrasAbas('limpar');
     } else {
       // Falhou a limpeza na página: o perfil permanece como estava.
       statusEl.textContent = (r && r.error) ? textoDeErro(r.error) : mensagem('statusInjecaoErro');
@@ -432,6 +477,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     statusEl.textContent = (r && r.success) ? mensagem('statusFiltroOk')
       : (r && r.error) ? textoDeErro(r.error) : mensagem('statusInjecaoErro');
+    // Sincronização (v2.0.0): propaga o estado salvo para as abas já abertas.
+    if (r && r.success) await sincronizarOutrasAbas('aplicar');
   }
 
   // ---- Botões de modo (listeners registrados sincronamente; a
@@ -447,7 +494,13 @@ document.addEventListener('DOMContentLoaded', () => {
           : (r && r.error) ? textoDeErro(r.error) : mensagem('statusInjecaoErro');
       }
       else if (mode === 'resumo') {
-        const resultado = await enviarParaContent('summarize');
+        const resultado = await enviarParaContent('summarize', {
+          // v2.0.0: idioma de saída (original × português via cadeia
+          // modelo→modelo no worker) e Português Claro (geração com frases
+          // curtas). Sem seleção, os valores padrão preservam a v1.0.0.
+          idioma: idiomaSaidaEl.value === 'pt' ? 'pt' : 'original',
+          claro: claroEl.checked === true
+        });
         if (resultado?.error) statusEl.textContent = textoDeErro(resultado.error);
         else if (resultado?.summary) {
           statusEl.textContent = mensagem('statusResumoOk');
@@ -458,13 +511,33 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       else if (mode === 'imagens') {
         const resultado = await enviarParaContent('describe-images', {
-          prefixoAltIA: mensagem('prefixoAltIA')
+          prefixoAltIA: mensagem('prefixoAltIA'),
+          // v2.0.0: a descrição também segue o idioma de saída escolhido.
+          idioma: idiomaSaidaEl.value === 'pt' ? 'pt' : 'original'
         });
         if (resultado?.error) statusEl.textContent = textoDeErro(resultado.error);
         else if (typeof resultado?.totalSemAlt === 'number') {
           statusEl.textContent = resultado.totalSemAlt === 0
             ? mensagem('statusImagensCompletas')
             : mensagem('statusImagensIniciando', [String(resultado.totalSemAlt)]);
+        }
+        else statusEl.textContent = mensagem('statusSemResposta');
+      }
+      else if (mode === 'perguntar') {
+        // Assistente de perguntas e respostas (v2.0.0): modelo QA EXTRATIVO
+        // — a resposta é um trecho do próprio texto da página (sem geração
+        // livre). A pergunta sai do campo rotulado acima do botão.
+        const pergunta = (inputPergunta.value || '').trim();
+        if (!pergunta) {
+          statusEl.textContent = mensagem('statusPerguntaVazia');
+          return;
+        }
+        const resultado = await enviarParaContent('perguntar', { pergunta });
+        if (resultado?.error) statusEl.textContent = textoDeErro(resultado.error);
+        else if (typeof resultado?.resposta === 'string' && resultado.resposta.trim()) {
+          statusEl.textContent = mensagem('statusQaOk');
+          aiOutput.textContent = `${mensagem('prefixoQa')} ${resultado.resposta.trim()}`;
+          resultArea.classList.remove('hidden');
         }
         else statusEl.textContent = mensagem('statusSemResposta');
       }
@@ -525,6 +598,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // Toggle das legendas ao vivo (v1.4.0): a captura vive no service
         // worker/offscreen — ligar e desligar são mensagens de runtime, e
         // o gesto do usuário (este clique) habilita a captura da aba.
+        // v2.0.0: no Firefox a captura de aba não existe (sem tabCapture);
+        // os controles já ficam ocultos e o fluxo não inicia.
+        if (ehFirefox) {
+          statusEl.textContent = mensagem('statusLegendasFirefox');
+          return;
+        }
         const ativo = btn.getAttribute('aria-pressed') === 'true';
         if (ativo) {
           const r = await enviarRuntimeComTeto({ target: 'background', type: 'clarifica-legendas', action: 'parar' });
@@ -574,6 +653,50 @@ document.addEventListener('DOMContentLoaded', () => {
           if (!a.total) statusEl.textContent = mensagem('statusAuditoriaSemVideo');
           else if (a.semLegenda === 0) statusEl.textContent = mensagem('statusAuditoriaLegendasOk', [String(a.total)]);
           else statusEl.textContent = mensagem('statusAuditoriaLegendas', [String(a.semLegenda), String(a.total)]);
+        }
+        else statusEl.textContent = mensagem('statusSemResposta');
+      }
+      else if (mode === 'auditoria') {
+        // Painel de auditoria WCAG em tempo real (v2.0.0): toggle — abre o
+        // painel acessível na página (dialog não modal, Esc fecha) ou
+        // fecha o que já está aberto. As strings de interface (título,
+        // dicas por critério, rodapé) são traduzidas AQUI e cruzam a
+        // fronteira como argumentos — a página não tem chrome.i18n.
+        const resultado = await enviarParaContent('painel-auditoria', {
+          dicas: {
+            dicaCriterio111: mensagem('dicaCriterio111'),
+            dicaCriterio122: mensagem('dicaCriterio122'),
+            dicaCriterio131: mensagem('dicaCriterio131'),
+            dicaCriterio241: mensagem('dicaCriterio241'),
+            dicaCriterio244: mensagem('dicaCriterio244'),
+            dicaCriterio311: mensagem('dicaCriterio311'),
+            dicaCriterio412: mensagem('dicaCriterio412')
+          },
+          rotulos: {
+            titulo: mensagem('painelTitulo'),
+            rodape: mensagem('painelRodape'),
+            fechar: mensagem('painelFechar'),
+            semBarreiras: mensagem('painelSemBarreiras'),
+            prefixoResumo: mensagem('painelPrefixoResumo'),
+            unidadeBarreiras: mensagem('painelUnidadeBarreiras'),
+            unidadeCriterios: mensagem('painelUnidadeCriterios')
+          },
+          anuncioAberto: mensagem('anuncioPainelAberto'),
+          anuncioFechado: mensagem('anuncioPainelFechado')
+        });
+        const btnAuditoria = document.querySelector('.mode-btn[data-mode="auditoria"]');
+        if (resultado?.error) {
+          statusEl.textContent = textoDeErro(resultado.error);
+          if (btnAuditoria) btnAuditoria.removeAttribute('aria-pressed');
+        } else if (resultado && resultado.aberto && resultado.auditoria) {
+          const a = resultado.auditoria;
+          if (btnAuditoria) btnAuditoria.setAttribute('aria-pressed', 'true');
+          statusEl.textContent = a.totalBarreiras === 0
+            ? mensagem('statusAuditoriaPainelZero')
+            : mensagem('statusAuditoriaPainel', [String(a.totalBarreiras), String(a.criterios)]);
+        } else if (resultado && resultado.fechado) {
+          if (btnAuditoria) btnAuditoria.removeAttribute('aria-pressed');
+          statusEl.textContent = mensagem('statusAuditoriaFechado');
         }
         else statusEl.textContent = mensagem('statusSemResposta');
       }
@@ -635,6 +758,20 @@ document.addEventListener('DOMContentLoaded', () => {
         statusEl.textContent = mensagem('statusLegendasAtivas');
       }
     }
+  });
+
+  // ---- Configurações da v2.0.0 (persistência imediata) ----
+  // Idioma de saída da IA, Português Claro e sincronização de perfis —
+  // cada escolha fica memorizada para o próximo uso (mesma disciplina do
+  // tema e do último filtro desde a v1.1.0).
+  idiomaSaidaEl.addEventListener('change', async () => {
+    await salvarConfig({ idiomaSaida: idiomaSaidaEl.value === 'pt' ? 'pt' : 'original' });
+  });
+  claroEl.addEventListener('change', async () => {
+    await salvarConfig({ claro: claroEl.checked === true });
+  });
+  sincronizarEl.addEventListener('change', async () => {
+    await salvarConfig({ sincronizacaoAtiva: sincronizarEl.checked === true });
   });
 
   carregarMensagens()
@@ -912,7 +1049,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const { worker, urlBlob } = await criarWorkerIA();
         const encerrar = () => { worker.terminate(); URL.revokeObjectURL(urlBlob); };
         return await new Promise((resolve) => {
-          worker.postMessage({ type: 'summarize', data: texto.substring(0, 3000) });
+          // v2.0.0: opcoes cruza a fronteira (idioma de saída × Português
+          // Claro) — o worker aplica a cadeia modelo→modelo e os parâmetros
+          // de geração. Sem extras, opcoes fica vazia (v1.0.0 intocada).
+          worker.postMessage({ type: 'summarize', data: texto.substring(0, 3000), opcoes: { idioma: (extras && extras.idioma) || 'original', claro: !!(extras && extras.claro) } });
           // O worker emite mensagens de progresso ("loading"/"processing") antes
           // do resultado final: só encerra na mensagem de success (ou erro),
           // nunca no primeiro sinal de vida.
@@ -972,7 +1112,9 @@ document.addEventListener('DOMContentLoaded', () => {
       };
 
       imagens.forEach((img, i) => {
-        setTimeout(() => worker.postMessage({ type: 'describe-image', data: img.src }), i * 500);
+        // v2.0.0: opcoes.idioma cruza a fronteira — descrição gerada em
+        // inglês pelo vit-gpt2 e traduzida pelo opus-mt no mesmo worker.
+        setTimeout(() => worker.postMessage({ type: 'describe-image', data: img.src, opcoes: { idioma: (extras && extras.idioma) || 'original' } }), i * 500);
       });
 
       return { totalSemAlt: imagens.length };
@@ -1028,6 +1170,39 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
+    if (acao === 'perguntar') {
+      // Assistente de perguntas e respostas (v2.0.0): o CONTEXTO é o texto
+      // da página (main/article/body, teto de 4000 caracteres) e a resposta
+      // é EXTRAÍDA dele pelo modelo distilbert-squad — sem geração livre,
+      // o que elimina alucinação por construção. Teto de 50 caracteres:
+      // páginas praticamente vazias não têm conteúdo para responder.
+      const pergunta = String((extras && extras.pergunta) || '').trim();
+      if (!pergunta) return { error: 'pergunta-vazia' };
+      const texto = (document.querySelector('main, article, #content') || document.body).innerText || '';
+      const contexto = texto.trim().slice(0, 4000);
+      if (contexto.length < 50) return { error: 'contexto-curto' };
+
+      try {
+        const { worker, urlBlob } = await criarWorkerIA();
+        const encerrar = () => { worker.terminate(); URL.revokeObjectURL(urlBlob); };
+        return await new Promise((resolve) => {
+          worker.postMessage({ type: 'question-answering', data: { pergunta, contexto } });
+          worker.onmessage = (e) => {
+            if (e.data.type === 'qa-answer') {
+              encerrar();
+              resolve({ resposta: String(e.data.answer || '').trim(), score: e.data.score });
+            } else if (e.data.type === 'error') {
+              encerrar();
+              resolve({ error: e.data.error || 'erro-qa' });
+            }
+          };
+          worker.onerror = () => { encerrar(); resolve({ error: 'falha-worker' }); };
+        });
+      } catch (e) {
+        return { error: 'falha-worker' };
+      }
+    }
+
     if (acao === 'auditar-legendas') {
       // Verificador mínimo do critério WCAG 1.2.2 (v1.4.0): inventaria os
       // <video> da página e conta quantos possuem <track kind="captions">
@@ -1069,6 +1244,251 @@ document.addEventListener('DOMContentLoaded', () => {
         return { temCaptions, temSubtitles };
       });
       return { descritores, auditoria: auditoriaLegendas(descritores) };
+    }
+
+    if (acao === 'painel-auditoria') {
+      // Painel de auditoria WCAG em tempo real (v2.0.0): toggle. A abertura
+      // cria um dialog NÃO modal (aria-modal=false — o usuário continua
+      // operando a página), foca o botão de fechar (WCAG 2.4.3), reexecuta
+      // a auditoria a cada mutação relevante (MutationObserver com
+      // debounce de 1,2 s) e fecha com Esc. O JULGAMENTO dos achados é a
+      // função pura auditarAcessibilidade (cópia canônica abaixo; fonte em
+      // scripts/clarifica-puro.js, paridade por tests/auditoria.test.js).
+      if (window.__clarificaPainelAuditoria) {
+        try { window.__clarificaPainelAuditoria.fechar(); } catch (e) { /* nó fora do DOM */ }
+        return { fechado: true };
+      }
+      const dicas = (extras && extras.dicas) || {};
+      const rotulos = (extras && extras.rotulos) || {};
+
+      // === INÍCIO DA LÓGICA PURA DE AUDITORIA WCAG (v2.0.0: cópia canônica
+      // de scripts/clarifica-puro.js; paridade garantida por
+      // tests/auditoria.test.js — mesmo padrão das legendas) ===
+      function auditoriaLegendasPainel(descritores) {
+        const lista = Array.isArray(descritores) ? descritores : [];
+        const detalhes = lista.map((descritor, indice) => {
+          const temCaptions = !!(descritor && descritor.temCaptions);
+          const temSubtitles = !!(descritor && descritor.temSubtitles);
+          return { indice, temCaptions, temSubtitles, comLegendas: temCaptions || temSubtitles };
+        });
+        const comLegendas = detalhes.filter((d) => d.comLegendas).length;
+        return { total: lista.length, comLegendas, semLegenda: lista.length - comLegendas, detalhes };
+      }
+      const TEXTOS_LINK_GENERICOS_PAINEL = [
+        'clique aqui', 'aqui', 'leia mais', 'saiba mais', 'continue lendo',
+        'ver mais', 'mais', 'link', 'click here', 'here', 'read more', 'more',
+        'learn more', 'this link', 'link para', 'link para:'
+      ];
+      function ehTextoLinkGenerico(texto) {
+        const t = String(texto || '').trim().toLowerCase();
+        if (!t) return false;
+        return TEXTOS_LINK_GENERICOS_PAINEL.includes(t);
+      }
+      function headingsForaDeOrdem(niveis) {
+        const lista = Array.isArray(niveis) ? niveis.map((n) => Number(n)).filter((n) => n >= 1 && n <= 6) : [];
+        let anterior = 0;
+        for (const nivel of lista) {
+          if (anterior > 0 && nivel > anterior + 1) return true;
+          anterior = nivel;
+        }
+        return false;
+      }
+      function auditarAcessibilidade(descritores) {
+        const d = descritores && typeof descritores === 'object' ? descritores : {};
+        const imagens = Array.isArray(d.imagens) ? d.imagens : [];
+        const controles = Array.isArray(d.controles) ? d.controles : [];
+        const links = Array.isArray(d.links) ? d.links : [];
+        const iframes = Array.isArray(d.iframes) ? d.iframes : [];
+        const videos = Array.isArray(d.videos) ? d.videos : [];
+        const achados = [];
+        const imagensSemAlt = imagens.filter((img) => img && !img.temAlt).length;
+        if (imagensSemAlt > 0) achados.push({ criterio: '1.1.1', chaveMensagem: 'dicaCriterio111', contagem: imagensSemAlt });
+        const legenda = auditoriaLegendasPainel(videos);
+        if (legenda.semLegenda > 0) achados.push({ criterio: '1.2.2', chaveMensagem: 'dicaCriterio122', contagem: legenda.semLegenda });
+        const controlesSemNome = controles.filter((c) => c && !c.nome).length;
+        if (controlesSemNome > 0) achados.push({ criterio: '4.1.2', chaveMensagem: 'dicaCriterio412', contagem: controlesSemNome });
+        const genericos = links.filter((texto) => ehTextoLinkGenerico(texto)).length;
+        if (genericos > 0) achados.push({ criterio: '2.4.4', chaveMensagem: 'dicaCriterio244', contagem: genericos });
+        const iframesSemTitle = iframes.filter((f) => f && !f.temTitle).length;
+        if (iframesSemTitle > 0) achados.push({ criterio: '2.4.1', chaveMensagem: 'dicaCriterio241', contagem: iframesSemTitle });
+        if (!String(d.htmlLang || '').trim()) achados.push({ criterio: '3.1.1', chaveMensagem: 'dicaCriterio311', contagem: 1 });
+        if (headingsForaDeOrdem(d.headings)) achados.push({ criterio: '1.3.1', chaveMensagem: 'dicaCriterio131', contagem: 1 });
+        const totalBarreiras = achados.reduce((soma, a) => soma + a.contagem, 0);
+        return { achados, totalBarreiras, criterios: achados.length };
+      }
+      // === FIM DA LÓGICA PURA DE AUDITORIA WCAG ===
+
+      // COLETA de descritores planos (extração sem julgamento — o
+      // julgamento é a função pura acima). Nome acessível simplificado:
+      // aria-labelledby → aria-label → title → value (inputs de botão) →
+      // texto visível.
+      function nomeAcessivelDe(el) {
+        try {
+          const labelledby = el.getAttribute('aria-labelledby');
+          if (labelledby) {
+            const partes = labelledby.split(/\s+/)
+              .map((id) => (document.getElementById(id) || {}).textContent || '')
+              .join(' ').trim();
+            if (partes) return partes;
+          }
+          const aria = el.getAttribute('aria-label');
+          if (aria && aria.trim()) return aria.trim();
+          const title = el.getAttribute('title');
+          if (title && title.trim()) return title.trim();
+          const tipo = String(el.getAttribute && el.getAttribute('type') || '').toLowerCase();
+          if (el.tagName.toLowerCase() === 'input' && ['submit', 'button', 'reset'].includes(tipo)) {
+            const valor = el.getAttribute('value');
+            if (valor && valor.trim()) return valor.trim();
+          }
+          const alt = el.getAttribute('alt');
+          if (alt && alt.trim()) return alt.trim();
+          return (el.innerText || el.textContent || '').trim();
+        } catch (e) { return ''; }
+      }
+      function coletarDescritores() {
+        const controles = [];
+        try {
+          document.querySelectorAll('button, [role="button"], input[type="submit"], input[type="button"], input[type="reset"]').forEach((b) => {
+            controles.push({ tag: b.tagName.toLowerCase(), nome: nomeAcessivelDe(b) });
+          });
+          document.querySelectorAll('input[type="text"], input[type="search"], input[type="email"], input[type="password"], input[type="tel"], input[type="number"], input[type="url"], input[type="date"], select, textarea').forEach((c) => {
+            let nome = '';
+            try {
+              const id = c.getAttribute('id');
+              if (id) {
+                const label = document.querySelector('label[for="' + id + '"]');
+                if (label && (label.textContent || '').trim()) nome = label.textContent.trim();
+              }
+              if (!nome && c.parentElement && c.parentElement.tagName === 'LABEL') {
+                nome = (c.parentElement.textContent || '').trim();
+              }
+            } catch (e) { /* querySelector indisponível: segue sem label */ }
+            controles.push({ tag: c.tagName.toLowerCase(), nome: nome || nomeAcessivelDe(c) });
+          });
+        } catch (e) { /* página sem controles */ }
+        const videos = Array.from(document.querySelectorAll('video')).map((video) => {
+          const faixas = Array.from(video.querySelectorAll('track'));
+          const tipoDe = (t) => String(t.getAttribute('kind') || '').toLowerCase();
+          let temCaptions = faixas.some((t) => tipoDe(t) === 'captions');
+          let temSubtitles = faixas.some((t) => tipoDe(t) === 'subtitles');
+          try {
+            if (video.textTracks) {
+              for (const faixa of video.textTracks) {
+                if (faixa.kind === 'captions') temCaptions = true;
+                if (faixa.kind === 'subtitles') temSubtitles = true;
+              }
+            }
+          } catch (e) { /* textTracks indisponível: segue com o DOM */ }
+          return { temCaptions, temSubtitles };
+        });
+        return {
+          htmlLang: document.documentElement.getAttribute('lang') || '',
+          imagens: Array.from(document.querySelectorAll('img')).map((img) => ({ temAlt: img.hasAttribute('alt') })),
+          videos,
+          controles,
+          links: Array.from(document.querySelectorAll('a[href]')).map((a) => (a.innerText || a.textContent || '').trim().slice(0, 60)),
+          iframes: Array.from(document.querySelectorAll('iframe')).map((f) => ({ temTitle: !!String(f.getAttribute('title') || '').trim() })),
+          headings: Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, h6')).map((h) => Number(h.tagName[1]))
+        };
+      }
+
+      // ---- Painel DOM (dialog não modal, acessível, em tempo real) ----
+      const painel = document.createElement('div');
+      painel.id = 'clarifica-painel-auditoria';
+      painel.setAttribute('role', 'dialog');
+      painel.setAttribute('aria-modal', 'false');
+      painel.setAttribute('aria-label', rotulos.titulo || 'Auditoria WCAG');
+      painel.style.cssText = 'position:fixed;top:12px;right:12px;width:min(320px,92vw);max-height:min(70vh,560px);overflow-y:auto;background:rgba(2,6,23,0.94);color:#ffffff;font-size:0.9rem;line-height:1.45;border-radius:12px;z-index:2147483647;box-shadow:0 12px 32px rgba(0,0,0,0.5);padding:14px 16px;font-family:system-ui,sans-serif;';
+
+      const cabecalho = document.createElement('div');
+      cabecalho.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;';
+      const tituloPainel = document.createElement('h2');
+      tituloPainel.textContent = rotulos.titulo || 'Auditoria WCAG';
+      tituloPainel.style.cssText = 'font-size:1rem;margin:0;color:#ffffff;';
+      const btnFecharPainel = document.createElement('button');
+      btnFecharPainel.type = 'button';
+      btnFecharPainel.textContent = rotulos.fechar || 'Fechar';
+      btnFecharPainel.style.cssText = 'background:#1e293b;color:#ffffff;border:1px solid #475569;border-radius:6px;padding:4px 10px;font-size:0.8rem;cursor:pointer;';
+      cabecalho.appendChild(tituloPainel);
+      cabecalho.appendChild(btnFecharPainel);
+      painel.appendChild(cabecalho);
+
+      const regiaoViva = document.createElement('p');
+      regiaoViva.setAttribute('role', 'status');
+      regiaoViva.setAttribute('aria-live', 'polite');
+      regiaoViva.style.cssText = 'font-size:0.82rem;margin:0 0 8px;color:#cbd5f5;';
+      painel.appendChild(regiaoViva);
+
+      const lista = document.createElement('ul');
+      lista.style.cssText = 'margin:0 0 8px;padding-left:18px;';
+      painel.appendChild(lista);
+
+      const rodape = document.createElement('p');
+      rodape.textContent = rotulos.rodape || '';
+      rodape.style.cssText = 'font-size:0.72rem;color:#94a3b8;margin:0;';
+      painel.appendChild(rodape);
+
+      const anunciarNaPagina = (texto) => {
+        document.querySelectorAll('.clarifica-anuncio').forEach((a) => a.remove());
+        const anuncio = document.createElement('div');
+        anuncio.className = 'clarifica-anuncio';
+        anuncio.setAttribute('role', 'status');
+        anuncio.setAttribute('aria-live', 'assertive');
+        anuncio.textContent = texto;
+        document.body.appendChild(anuncio);
+        setTimeout(() => anuncio.remove(), 3000);
+      };
+
+      function atualizarPainel() {
+        const auditoria = auditarAcessibilidade(coletarDescritores());
+        while (lista.firstChild) lista.removeChild(lista.firstChild);
+        if (!auditoria.achados.length) {
+          const item = document.createElement('li');
+          item.textContent = rotulos.semBarreiras || 'Nenhuma barreira detectada.';
+          lista.appendChild(item);
+        } else {
+          for (const achado of auditoria.achados) {
+            const item = document.createElement('li');
+            item.textContent = `${achado.criterio} — ${dicas[achado.chaveMensagem] || ''} (${achado.contagem})`;
+            lista.appendChild(item);
+          }
+        }
+        regiaoViva.textContent = auditoria.totalBarreiras === 0
+          ? (rotulos.semBarreiras || '')
+          : `${rotulos.prefixoResumo || ''}${auditoria.totalBarreiras} ${rotulos.unidadeBarreiras || ''} · ${auditoria.criterios} ${rotulos.unidadeCriterios || ''}`;
+        return auditoria;
+      }
+
+      // Tempo real: mutações EXTERNAS ao painel (a própria atualização do
+      // painel não re-agenda — evita laço infinito de observação).
+      let temporizador = null;
+      const observador = new MutationObserver((mutacoes) => {
+        const externa = mutacoes.some((m) => !(m.target === painel || painel.contains(m.target)));
+        if (!externa) return;
+        if (temporizador !== null) clearTimeout(temporizador);
+        temporizador = setTimeout(atualizarPainel, 1200);
+      });
+
+      const aoTeclar = (evento) => {
+        if (evento && evento.key === 'Escape') fecharPainel();
+      };
+      function fecharPainel() {
+        try { if (temporizador !== null) clearTimeout(temporizador); } catch (e) { /* já limpo */ }
+        try { observador.disconnect(); } catch (e) { /* já desconectado */ }
+        try { document.removeEventListener('keydown', aoTeclar, true); } catch (e) { /* já removido */ }
+        try { painel.remove(); } catch (e) { /* nó fora do DOM */ }
+        window.__clarificaPainelAuditoria = null;
+        anunciarNaPagina((extras && extras.anuncioFechado) || '');
+      }
+      window.__clarificaPainelAuditoria = { painel, fechar: fecharPainel };
+      btnFecharPainel.addEventListener('click', fecharPainel);
+      document.addEventListener('keydown', aoTeclar, true);
+      document.body.appendChild(painel);
+      try { btnFecharPainel.focus(); } catch (e) { /* sem foco disponível */ }
+      observador.observe(document.documentElement, { childList: true, subtree: true });
+      const auditoriaInicial = atualizarPainel();
+      anunciarNaPagina((extras && extras.anuncioAberto) || '');
+      return { aberto: true, auditoria: auditoriaInicial };
     }
 
     if (acao === 'ocr-imagens') {

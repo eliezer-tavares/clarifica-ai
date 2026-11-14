@@ -297,3 +297,131 @@ test('IA real no navegador: botão Resumir produz resumo autêntico na página',
   expect(resumo.trim().length).toBeGreaterThan(20);
   await expect(navegador.popup.locator('#result-area')).toBeVisible();
 });
+
+// ---- Painel de auditoria WCAG em tempo real (v2.0.0) ----
+
+test('painel de auditoria (v2.0.0): página real com barreiras relata critérios e contagens', async () => {
+  const { pagina } = await navegador.abrirPaginaDeTeste(`${servidor.url}/barreiras`);
+  const btnAuditoria = navegador.popup.locator('.mode-btn[data-mode="auditoria"]');
+  await btnAuditoria.click();
+  await expect(navegador.popup.locator('#status')).toContainText('Painel aberto na página');
+  await expect(navegador.popup.locator('#status')).toContainText('5 barreira(s) em 4 critério(s)');
+  await expect(btnAuditoria).toHaveAttribute('aria-pressed', 'true');
+
+  // O painel real existe NA PÁGINA, como dialog não modal com rótulo.
+  const estadoPainel = await pagina.evaluate(() => {
+    const p = document.getElementById('clarifica-painel-auditoria');
+    if (!p) return null;
+    return {
+      papel: p.getAttribute('role'),
+      naoModal: p.getAttribute('aria-modal'),
+      rotulo: p.getAttribute('aria-label'),
+      lista: p.querySelector('ul')?.textContent || '',
+      resumo: p.querySelector('[role="status"]')?.textContent || ''
+    };
+  });
+  expect(estadoPainel).not.toBeNull();
+  expect(estadoPainel.papel).toBe('dialog');
+  expect(estadoPainel.naoModal).toBe('false');
+  expect(estadoPainel.rotulo).toBe('Auditoria WCAG — tempo real');
+  expect(estadoPainel.lista).toContain('1.1.1');
+  expect(estadoPainel.lista).toContain('4.1.2');
+  expect(estadoPainel.lista).toContain('2.4.4');
+  expect(estadoPainel.lista).toContain('2.4.1');
+
+  // TEMPO REAL: mutação externa (imagem sem alt adicionada) atualiza a
+  // contagem sem reabrir o painel (debounce de 1,2 s do MutationObserver).
+  await pagina.evaluate(() => {
+    const img = document.createElement('img');
+    img.src = '/imagens/cidade.svg';
+    document.querySelector('main').appendChild(img);
+  });
+  await pagina.waitForFunction(() => {
+    const p = document.getElementById('clarifica-painel-auditoria');
+    return p && /6 barreira/.test(p.querySelector('[role="status"]')?.textContent || '');
+  }, { timeout: 8000 });
+
+  // Segundo clique fecha o painel (toggle) e desmarca o botão.
+  await btnAuditoria.click();
+  await expect(navegador.popup.locator('#status')).toHaveText('Painel de auditoria fechado.');
+  await expect(btnAuditoria).not.toHaveAttribute('aria-pressed');
+  const removido = await pagina.evaluate(() => document.getElementById('clarifica-painel-auditoria') === null);
+  expect(removido).toBe(true);
+  await pagina.close();
+});
+
+test('painel de auditoria (v2.0.0): página limpa relata zero barreiras e Esc fecha', async () => {
+  // URL ÚNICA (rota não mapeada → o servidor serve o artigo limpo): a busca
+  // da "aba ativa" por URL precisa achar ESTA página (o /artigo original do
+  // beforeAll fica aberto em outra aba).
+  const { pagina } = await navegador.abrirPaginaDeTeste(`${servidor.url}/artigo-limpo`);
+  await navegador.popup.locator('.mode-btn[data-mode="auditoria"]').click();
+  await expect(navegador.popup.locator('#status')).toContainText('nenhuma barreira detectada');
+  const limpa = await pagina.evaluate(() => {
+    const p = document.getElementById('clarifica-painel-auditoria');
+    return p && /Nenhuma barreira/.test(p.querySelector('ul')?.textContent || '');
+  });
+  expect(limpa).toBe(true);
+  // Teclado: Esc fecha o dialog (WCAG 2.1.1) — o fechamento é anunciado NA
+  // PÁGINA para o leitor de tela (região aria-live do produto); o popup é
+  // efêmero e não reflete fechamentos externos (comportamento da v1.4.0
+  // com as legendas é o mesmo).
+  await instalarGravadorDeAnuncios(pagina);
+  await pagina.keyboard.press('Escape');
+  const fechamento = await pagina.waitForFunction(() =>
+    document.getElementById('clarifica-painel-auditoria') === null
+    && [...document.querySelectorAll('.clarifica-anuncio')]
+      .some((a) => /Painel de auditoria WCAG fechado/.test(a.textContent || '')),
+    { timeout: 5000 }).then(() => true).catch(() => false);
+  expect(fechamento, 'painel removido e fechamento anunciado na página ao pressionar Esc').toBe(true);
+  await pagina.close();
+});
+
+// ---- Assistente de perguntas (v2.0.0) ----
+
+test('perguntas e respostas (v2.0.0): pergunta vazia é recusada antes de qualquer injeção', async () => {
+  await navegador.abrirPaginaDeTeste(`${servidor.url}/artigo`);
+  await navegador.popup.locator('.mode-btn[data-mode="perguntar"]').click();
+  await expect(navegador.popup.locator('#status')).toHaveText('Digite uma pergunta antes de usar o assistente.');
+  // Página com texto suficiente → nenhum erro de console
+  expect(navegador.erros).toEqual([]);
+});
+
+test('IA real no navegador (v2.0.0, opt-in): QA extrativo responde a partir do texto da página', async () => {
+  test.skip(!process.env.CLARIFICA_E2E_IA, 'IA real é opt-in: executar com CLARIFICA_E2E_IA=1 (baixa ~70 MB na 1ª vez)');
+  await navegador.abrirPaginaDeTeste(`${servidor.url}/artigo`);
+  test.setTimeout(900000);
+  await navegador.popup.locator('#pergunta').fill('O que é acessibilidade digital?');
+  await navegador.popup.locator('.mode-btn[data-mode="perguntar"]').click();
+  await expect(navegador.popup.locator('#status')).toHaveText('Resposta encontrada na página!', { timeout: 890000 });
+  const resposta = await navegador.popup.locator('#ai-output').textContent();
+  expect(resposta.trim().length).toBeGreaterThan(5);
+  await expect(navegador.popup.locator('#result-area')).toBeVisible();
+});
+
+// ---- Sincronização de perfis e filtros (v2.0.0) ----
+
+test('sincronização (v2.0.0): filtro aplicado reaparece automaticamente em páginas novas', async () => {
+  // Aba A: aplica o filtro de tritanopia pelo popup (fluxo real).
+  await navegador.abrirPaginaDeTeste(`${servidor.url}/artigo`);
+  await navegador.popup.locator('.mode-btn[data-mode="tritanopia"]').click();
+  await expect(navegador.popup.locator('#status')).toContainText('Filtro de daltonismo ativado');
+
+  // Navegação nova (onUpdated status complete): o service worker reaplica
+  // o estado salvo NA página recém-carregada — sem clique nenhum.
+  const nova = await navegador.abrirPaginaDeTeste(`${servidor.url}/video`);
+  await nova.pagina.waitForFunction(() =>
+    (document.documentElement.style.filter || '').includes('feColorMatrix'), { timeout: 15000 });
+  const filtro = await nova.pagina.evaluate(() => document.documentElement.style.filter);
+  expect(filtro).toContain('feColorMatrix');
+  await nova.pagina.close();
+
+  // A opção desligada interrompe a sincronização (controle do usuário).
+  await navegador.serviceWorker.evaluate(() => chrome.storage.local.set({ sincronizacaoAtiva: false }));
+  const outra = await navegador.abrirPaginaDeTeste(`${servidor.url}/pagina-curta`);
+  await outra.pagina.waitForTimeout(2500);
+  const filtroDesligado = await outra.pagina.evaluate(() => document.documentElement.style.filter || '');
+  expect(filtroDesligado).toBe('');
+  await navegador.serviceWorker.evaluate(() => chrome.storage.local.set({ sincronizacaoAtiva: true }));
+  await outra.pagina.close();
+});

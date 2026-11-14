@@ -33,10 +33,10 @@ test('manifest aceito pelo Chrome real: service worker MV3 registrado', async ()
   expect(url).toMatch(/\/background\.js$/);
 });
 
-test('popup abre como página real: 15 botões, barra de status aria-live e zero erros de console', async () => {
+test('popup abre como página real: 17 botões, barra de status aria-live e zero erros de console', async () => {
   const { popup } = navegador;
 
-  await expect(popup.locator('.mode-btn')).toHaveCount(15);
+  await expect(popup.locator('.mode-btn')).toHaveCount(17);
 
   const status = popup.locator('#status');
   await expect(status).toHaveAttribute('role', 'status');
@@ -73,6 +73,20 @@ test('popup abre como página real: 15 botões, barra de status aria-live e zero
   await expect(seletor).toHaveCount(1);
   expect(await seletor.locator('option').allTextContents()).toHaveLength(2);
   await expect(seletor).toHaveValue('original');
+
+  // Novidades da v2.0.0 — perguntas e respostas, idioma de saída,
+  // Português Claro, sincronização e painel de auditoria WCAG.
+  expect(rotulos.some((t) => /Perguntar à IA/.test(t))).toBe(true);
+  await expect(popup.locator('.mode-btn[data-mode="perguntar"]')).toHaveCount(1);
+  await expect(popup.locator('.mode-btn[data-mode="auditoria"]')).toHaveAttribute('aria-pressed', 'false');
+  await expect(popup.locator('#pergunta')).toHaveCount(1);
+  await expect(popup.locator('label[for="pergunta"]')).toContainText('pergunta');
+  const saida = popup.locator('#idioma-saida');
+  expect(await saida.locator('option').allTextContents()).toHaveLength(2);
+  await expect(saida).toHaveValue('original');
+  await expect(popup.locator('#claro')).toHaveCount(1);
+  await expect(popup.locator('#sincronizar')).toHaveCount(1);
+  await expect(popup.locator('#sincronizar')).toBeChecked();
 
   // Novidades da v1.1 presentes no popup real: slider de intensidade e
   // botão de tema (rotulado, i18n pt-BR aplicado pelo Chrome).

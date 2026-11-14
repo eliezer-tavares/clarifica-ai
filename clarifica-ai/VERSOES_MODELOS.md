@@ -8,8 +8,8 @@ O bloco abaixo é a única fonte autorizada de versões. Ele é **lido por teste
 
 ```json
 {
-  "registry_versao": 3,
-  "atualizado_em": "2026-11-09",
+  "registry_versao": 4,
+  "atualizado_em": "2026-11-12",
   "transformers_js": {
     "pacote_npm": "@xenova/transformers",
     "versao": "2.14.0",
@@ -68,6 +68,15 @@ O bloco abaixo é a única fonte autorizada de versões. Ele é **lido por teste
       "tamanho_aproximado": "~115 MB",
       "revisao_verificada_em": "2026-11-09",
       "nota": "modelo Marian multilíngue EN→línguas românicas; o produto fixa o destino em português pelo prefixo '>>pt<< ' no texto de origem (convenção dos modelos Marian multilíngues), aplicado no ai-worker.js"
+    },
+    "perguntas": {
+      "id": "Xenova/distilbert-base-cased-distilled-squad",
+      "revisao": "bdbb0a5e9c617c3c7ea9f3cbaf2be3ad871bcd7d",
+      "tarefa": "question-answering",
+      "quantizacao": "int8 (quantized: true)",
+      "tamanho_aproximado": "~70 MB",
+      "revisao_verificada_em": "2026-11-12",
+      "nota": "QA EXTRATIVO sobre o texto da página (SQuAD): a resposta é um TRECHO do contexto enviado — sem geração livre, sem alucinação por construção; SHA obtido via https://huggingface.co/api/models/Xenova/distilbert-base-cased-distilled-squad na v2.0.0"
     }
   },
   "tts": {
@@ -103,6 +112,8 @@ O teste `tests/versoes-modelos.test.js` lê o registry deste arquivo e confronta
 > **v1.3.0 — registry sobe para 3 (Áudio e Multimodal):** três modelos novos entram por este registry, na revisão fixada e auditada por inferência real: `Xenova/whisper-tiny` (transcrição de áudio 16 kHz de vídeos e podcasts), `Xenova/trocr-small-printed` (OCR de texto impresso aplicado como alt/aria-label) e `Xenova/opus-mt-en-ROMANCE` (tradução EN→PT com destino fixado por `>>pt<<`). A leitura em voz alta NÃO adiciona modelo: usa a Web Speech API (vozes do sistema), decisão declarada no próprio registry (`tts`). A chave de cache do CI mudou em lockstep (agora embute os 5 SHAs) e o total de pesos sobe de ~580 MB para ~800 MB — README e `ci.yml` atualizados na mesma revisão.
 >
 > **v1.4.0 — NENHUM modelo novo, registry permanece em 3 (Legendas ao Vivo e Bilinguismo):** a release de acessibilidade audiovisual cresce em CÓDIGO (documento offscreen, captura de aba, módulo de lógica pura `clarifica-puro.js`, verificador WCAG 1.2.2 — cerca de 300 linhas), não em pesos. O `whisper-tiny` já fixado passa a atender também as legendas ao vivo (janelas de 7 s com sobreposição de 1 s no documento offscreen, task transcribe/traduzir por opção de mensagem) — a opção de tradução usa a task `translate` do próprio pipeline de reconhecimento de fala (fala em qualquer idioma detectado → texto em inglês), sem download novo; quem já usou a transcrição baixa ZERO bytes. A qualidade da tradução pelo modelo tiny é declarada como aproximada; migrar para `whisper-base` no futuro segue o procedimento de upgrade da seção 4 (e mudaria a chave de cache do CI). A chave de cache NÃO mudou nesta release (SHAs inalterados).
+>
+> **v2.0.0 — registry sobe para 4 (versão final: QA local e saída em português):** UM modelo novo entra por este registry, na revisão fixada e auditada por inferência real: `Xenova/distilbert-base-cased-distilled-squad` (perguntas e respostas EXTRATIVAS sobre o texto da página — a resposta é um trecho do contexto, sem alucinação por construção). A saída em português do resumo e da descrição de imagens NÃO adiciona modelo: é a cadeia modelo→modelo com o `opus-mt-en-ROMANCE` já fixado desde a v1.3.0 (texto gerado em inglês → tradução no mesmo worker pelo prefixo `>>pt<< `); o Português Claro é assistido por MODELO (parâmetros de geração com teto menor de tokens — frases curtas e ordem direta), via `parametrosDeGeracao` da lógica pura compartilhada, não por regras de reescrita. Total de pesos sobe de ~800 MB para ~865 MB — README e chave de cache do CI atualizados em lockstep (o SHA curto do QA entra na chave, invalidando o cache de propósito para validar os pesos novos).
 
 ## 3. Por que fixar (as quatro razões)
 
@@ -126,7 +137,7 @@ Execute na ordem, sempre em um branch com PR — o CI é o porteiro:
 7. **Atualizar o CI** — troque os SHAs curtos na chave do cache em `.github/workflows/ci.yml` (passo 2 invalida o cache antigo de propósito).
 8. **Documentar** — registre em `tests/TEST_REPORT.md` a nova execução e o motivo do upgrade.
 
-**Critérios de aceite:** CI verde nos dois jobs; outputs reais revisados por humano; tamanho do download compatível com o limite declarado no README (~600 MB); tempo de inferência aceitável em hardware modesto.
+**Critérios de aceite:** CI verde nos dois jobs; outputs reais revisados por humano; tamanho do download compatível com o limite declarado no README (~865 MB); tempo de inferência aceitável em hardware modesto.
 
 ## 5. Rollback
 

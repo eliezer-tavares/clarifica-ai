@@ -96,6 +96,22 @@ p { font-size: 0.8rem; color: var(--secundario); margin: 0 0 16px 0; }
 /* Nota honesta de latência das legendas (v1.4.0): texto de apoio menor. */
 .nota-legendas { font-size: 0.72rem; color: var(--secundario); margin: 4px 0 14px; line-height: 1.4; }
 
+/* Assistentes da v2.0.0 — campo de pergunta (QA), checkboxes e botão de
+   auditoria seguem a mesma gramática visual das seções anteriores. */
+.pergunta-row { display: flex; flex-direction: column; gap: 4px; margin: 8px 0 4px; }
+.pergunta-row label { font-size: 0.8rem; color: var(--secundario); }
+.pergunta-row input[type="text"] {
+  padding: 8px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); font-size: 0.85rem;
+}
+.pergunta-row input[type="text"]:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.checkbox-row { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0 4px; }
+.checkbox-row input[type="checkbox"] { width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--primary); flex: none; }
+.checkbox-row label { font-size: 0.8rem; color: var(--text); line-height: 1.4; }
+/* Painel de auditoria WCAG (v2.0.0) — mesma gramática dos perfis/mídia. */
+.mode-btn.auditoria { border-left: 4px solid #eab308; }
+.mode-btn.auditoria.ativo { outline: 2px solid var(--primary); outline-offset: 1px; }
+
 .slider-row { display: flex; align-items: center; gap: 8px; margin: 8px 0 14px; }
 .slider-row label { font-size: 0.8rem; color: var(--secundario); flex: 1; }
 .slider-row input[type="range"] { flex: 1; accent-color: var(--primary); }

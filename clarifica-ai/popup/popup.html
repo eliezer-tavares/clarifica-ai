@@ -21,6 +21,31 @@
       <button class="mode-btn" data-mode="leitura">__MSG_btnLeitura__</button>
       <button class="mode-btn primary" data-mode="resumo">__MSG_btnResumo__</button>
       <button class="mode-btn" data-mode="imagens">__MSG_btnImagens__</button>
+      <!-- Assistente de perguntas e respostas (v2.0.0): modelo QA extrativo
+           (distilbert-squad, ~70 MB) responde a partir do PRÓPRIO texto da
+           página — sem geração livre. A pergunta é digitada no campo abaixo
+           e enviada ao worker de IA pela função injetada. -->
+      <button class="mode-btn" data-mode="perguntar">__MSG_btnPerguntar__</button>
+    </div>
+    <div class="pergunta-row">
+      <label for="pergunta">__MSG_labelPergunta__</label>
+      <input type="text" id="pergunta" placeholder="__MSG_placeholderPergunta__" autocomplete="off">
+    </div>
+    <!-- Saída em português (v2.0.0): resumo e descrição de imagens gerados
+         em inglês pelos modelos e traduzidos pela cadeia modelo→modelo
+         (opus-mt-en-ROMANCE, já fixado no registry) — zero modelos novos.
+         Português Claro: geração com frases curtas e ordem direta, assistida
+         por modelo (parâmetros de geração), não por regras de reescrita. -->
+    <div class="selector-row">
+      <label for="idioma-saida">__MSG_labelIdiomaSaida__</label>
+      <select id="idioma-saida">
+        <option value="original">__MSG_idiomaSaidaOriginal__</option>
+        <option value="pt">__MSG_idiomaSaidaPt__</option>
+      </select>
+    </div>
+    <div class="checkbox-row">
+      <input type="checkbox" id="claro">
+      <label for="claro">__MSG_labelPtClaro__</label>
     </div>
 
     <h2 class="secao-titulo">__MSG_secaoDaltonismo__</h2>
@@ -41,6 +66,14 @@
       <button class="mode-btn perfil" data-mode="tea" aria-pressed="false">__MSG_btnPerfilTea__</button>
       <button class="mode-btn perfil" data-mode="tdah" aria-pressed="false">__MSG_btnPerfilTdah__</button>
       <button class="mode-btn perfil" data-mode="dislexia" aria-pressed="false">__MSG_btnPerfilDislexia__</button>
+    </div>
+    <!-- Sincronização de perfis (v2.0.0): com a caixa marcada, o filtro e o
+         perfil ativos são REAPLICADOS automaticamente em cada navegação e
+         propagados para as abas http(s) já abertas (injeção via service
+         worker). Persistido no chrome.storage — o padrão é ligado. -->
+    <div class="checkbox-row">
+      <input type="checkbox" id="sincronizar" checked>
+      <label for="sincronizar">__MSG_labelSincronizar__</label>
     </div>
 
     <h2 class="secao-titulo">__MSG_secaoAudio__</h2>
@@ -63,6 +96,14 @@
       </select>
     </div>
     <p class="nota-legendas">__MSG_notaLegendasAtraso__</p>
+
+    <h2 class="secao-titulo">__MSG_secaoAuditoria__</h2>
+    <div class="grid-buttons">
+      <!-- Painel de auditoria WCAG em tempo real (v2.0.0): leitura pura de
+           estado (sem IA e sem rede) reexecutada a cada mutação relevante
+           da página, com painel acessível (dialog não modal, Esc fecha). -->
+      <button class="mode-btn auditoria" data-mode="auditoria" aria-pressed="false">__MSG_btnPainelAuditoria__</button>
+    </div>
 
     <div id="result-area" class="hidden">
       <h3>__MSG_tituloResultado__</h3>

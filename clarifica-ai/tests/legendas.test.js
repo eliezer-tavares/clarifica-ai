@@ -557,7 +557,7 @@ test('legendas: popup auditoria injetada em página REAL de teste (jsdom) conta 
 
 test('legendas: integração — manifest declara tabCapture/offscreen, Chrome 116 e os arquivos offscreen existem', () => {
   const manifest = JSON.parse(readExt('manifest.json'));
-  assert.equal(manifest.version, '1.4.0', 'versão da release corrente');
+  assert.equal(manifest.version, '2.0.0', 'versão da release corrente');
   for (const permissao of ['tabCapture', 'offscreen']) {
     assert.ok(manifest.permissions.includes(permissao), `permissão ${permissao} declarada`);
   }

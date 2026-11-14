@@ -42,16 +42,19 @@ async function aguardar(condicao, maxMs = 500, passo = 5) {
   while (!(await condicao()) && Date.now() - inicio < maxMs) await sleep(passo);
 }
 
-test('popup: estrutura com 17 botões nativos, slider de intensidade, status ao vivo e região de resultado', async () => {
+test('popup: estrutura com 19 botões nativos, slider de intensidade, status ao vivo e região de resultado', async () => {
   const { document } = await setup();
   const botoes = [...document.querySelectorAll('button')];
-  assert.equal(botoes.length, 17, '15 modos (6 originais + 3 perfis + 4 áudio/multimodal + 2 legendas da v1.4.0) + fechar + tema');
+  assert.equal(botoes.length, 19, '17 modos (6 originais + 3 perfis + 4 áudio/multimodal + 2 legendas + perguntar e auditoria da v2.0.0) + fechar + tema');
   assert.ok(botoes.every((b) => b.tagName === 'BUTTON'), 'todos os controles clicáveis são <button> nativos');
   assert.ok(botoes.every((b) => b.getAttribute('tabindex') !== '-1'), 'nenhum botão fora da ordem de TAB');
   assert.ok(botoes.every((b) => b.textContent.trim().length > 0), 'todos com rótulo acessível');
-  for (const mode of ['leitura', 'resumo', 'imagens', 'protanopia', 'deuteranopia', 'tritanopia', 'tea', 'tdah', 'dislexia', 'transcrever', 'ocr', 'traduzir', 'voz', 'legendas', 'verificar-legendas']) {
+  for (const mode of ['leitura', 'resumo', 'imagens', 'perguntar', 'protanopia', 'deuteranopia', 'tritanopia', 'tea', 'tdah', 'dislexia', 'transcrever', 'ocr', 'traduzir', 'voz', 'legendas', 'verificar-legendas', 'auditoria']) {
     assert.ok(botao(document, mode), `botão ${mode} presente`);
   }
+  // Painel de auditoria (v2.0.0): toggle com aria-pressed inicial.
+  const btnAuditoria = botao(document, 'auditoria');
+  assert.equal(btnAuditoria.getAttribute('aria-pressed'), 'false', 'painel inicia fechado (WCAG 4.1.2)');
   // Legendas ao vivo (v1.4.0): toggle com aria-pressed e seletor de idioma.
   const btnLegendas = botao(document, 'legendas');
   assert.equal(btnLegendas.getAttribute('aria-pressed'), 'false', 'legendas inicia desligado (WCAG 4.1.2)');
@@ -232,7 +235,7 @@ test('popup: tema cicla auto → claro → escuro → auto e persiste a escolha'
 
 test('popup: configurações persistidas são restauradas ao reabrir', async () => {
   const { document } = await setup({
-    storageInicial: { tema: 'escuro', intensidade: 40, ultimoFiltro: 'deuteranopia' }
+    storageInicial: { tema: 'escuro', intensidade: 40, ultimoFiltro: 'deuteranopia', idiomaSaida: 'pt', claro: true, sincronizacaoAtiva: false }
   });
   assert.equal(document.documentElement.getAttribute('data-tema'), 'escuro', 'tema restaurado');
   assert.equal(document.getElementById('intensidade').value, '40', 'intensidade restaurada');
@@ -240,6 +243,64 @@ test('popup: configurações persistidas são restauradas ao reabrir', async () 
   assert.equal(botao(document, 'deuteranopia').getAttribute('aria-pressed'), 'true', 'último filtro em destaque');
   assert.ok(botao(document, 'deuteranopia').classList.contains('ativo'));
   assert.equal(document.getElementById('btn-tema').textContent, 'Tema: escuro');
+  // v2.0.0: idioma de saída, Português Claro e sincronização restaurados.
+  assert.equal(document.getElementById('idioma-saida').value, 'pt', 'idioma de saída restaurado');
+  assert.equal(document.getElementById('claro').checked, true, 'Português Claro restaurado');
+  assert.equal(document.getElementById('sincronizar').checked, false, 'sincronização desligada restaurada');
+});
+
+test('popup: opções da v2.0.0 persistem ao mudar (idioma de saída, claro, sincronização)', async () => {
+  const { window, storageStore, document } = await setup();
+  const saida = document.getElementById('idioma-saida');
+  saida.value = 'pt';
+  saida.dispatchEvent(new window.Event('change'));
+  await sleep(10);
+  assert.equal(storageStore.idiomaSaida, 'pt', 'idioma de saída persistido');
+
+  const claro = document.getElementById('claro');
+  claro.checked = true;
+  claro.dispatchEvent(new window.Event('change'));
+  await sleep(10);
+  assert.equal(storageStore.claro, true, 'Português Claro persistido');
+
+  const sincronizar = document.getElementById('sincronizar');
+  sincronizar.checked = false;
+  sincronizar.dispatchEvent(new window.Event('change'));
+  await sleep(10);
+  assert.equal(storageStore.sincronizacaoAtiva, false, 'sincronização persistida ao desligar');
+});
+
+test('popup: resumo encaminha idioma de saída e Português Claro ao worker', async () => {
+  const { document } = await setup();
+  document.getElementById('idioma-saida').value = 'pt';
+  document.getElementById('claro').checked = true;
+  const paragrafo = document.createElement('p');
+  paragrafo.textContent = 'conteudo '.repeat(250);
+  document.querySelector('main').appendChild(paragrafo);
+  botao(document, 'resumo').click();
+  await sleep(60);
+  const worker = FakeWorker.instances[0];
+  assert.equal(worker.received[0].type, 'summarize');
+  // Objeto vindo do realm do jsdom: comparação campo a campo (deepEqual
+  // strict falharia por protótipos de mundos diferentes).
+  assert.equal(worker.received[0].opcoes.idioma, 'pt', 'idioma de saída cruza a fronteira');
+  assert.equal(worker.received[0].opcoes.claro, true, 'Português Claro cruza a fronteira');
+});
+
+test('popup: sincronização — aplicar perfil/filtro dispara propagação ao service worker', async () => {
+  const { stub, document } = await setup();
+  botao(document, 'protanopia').click();
+  await sleep(40);
+  const sincronizacoes = stub.calls.sendMessage.filter((m) => m && m.type === 'clarifica-sincronizar');
+  assert.equal(sincronizacoes.length, 1, 'uma propagação após aplicar o filtro');
+  assert.equal(sincronizacoes[0].action, 'aplicar');
+  assert.equal(sincronizacoes[0].target, 'background');
+
+  botao(document, 'tea').click();
+  await sleep(40);
+  const aposPerfil = stub.calls.sendMessage.filter((m) => m && m.type === 'clarifica-sincronizar');
+  assert.equal(aposPerfil.length, 2, 'propagação após aplicar o perfil');
+  assert.equal(aposPerfil[1].action, 'aplicar');
 });
 
 test('popup: resumo recusa textos curtos com mensagem clara', async () => {
@@ -263,7 +324,10 @@ test('popup: resumo envia texto ao Worker, exibe resultado e encerra o Worker', 
   document.querySelector('main').appendChild(paragrafo);
 
   botao(document, 'resumo').click();
-  await sleep(60);
+  // Espera ATIVA pelo fim do fluxo em vez de tempo fixo (corrida intermitente
+  // em máquinas carregadas — mesma correção de multimodal/qa).
+  await aguardar(() => Promise.resolve(FakeWorker.instances.length > 0 && FakeWorker.instances[0].terminated), 3000);
+  await aguardar(() => Promise.resolve(statusDe(document).textContent === 'Concluído!'), 3000);
 
   assert.equal(FakeWorker.instances.length, 1, 'um Worker criado');
   const worker = FakeWorker.instances[0];
@@ -293,6 +357,7 @@ test('popup: resumo com progresso real do worker — resultado só na mensagem f
   assert.notEqual(document.getElementById('ai-output').textContent, 'RESUMO-TESTE', 'resultado ainda não exibido');
 
   await sleep(60);
+  await aguardar(() => Promise.resolve(statusDe(document).textContent === 'Concluído!'), 3000);
   assert.equal(document.getElementById('ai-output').textContent, 'RESUMO-TESTE', 'resumo exibido na mensagem success');
   assert.equal(statusDe(document).textContent, 'Concluído!');
   assert.equal(worker.terminated, true, 'Worker encerrado apenas após o resultado');
@@ -305,7 +370,9 @@ test('popup: erro codificado do worker real é traduzido para o idioma da interf
   paragrafo.textContent = 'conteudo '.repeat(250);
   document.querySelector('main').appendChild(paragrafo);
   botao(document, 'resumo').click();
-  await sleep(60);
+  // Espera ATIVA pelo fim do fluxo em vez de tempo fixo (mesma corrida de qa/multimodal).
+  await aguardar(() => Promise.resolve(FakeWorker.instances[0] && FakeWorker.instances[0].terminated), 3000);
+  await aguardar(() => Promise.resolve(statusDe(document).textContent === 'Erro ao processar texto.'), 3000);
   assert.equal(statusDe(document).textContent, 'Erro ao processar texto.', 'código erro-resumo → mensagem i18n');
   assert.ok(document.getElementById('result-area').classList.contains('hidden'), 'resultado permanece oculto');
   assert.equal(FakeWorker.instances[0].terminated, true, 'Worker encerrado após o erro');
@@ -396,7 +463,8 @@ test('popup: erro do worker na descrição de imagens encerra o Worker (sem zumb
   botao(document, 'imagens').click();
   await sleep(30);
   assert.equal(statusDe(document).textContent, 'Descrevendo 2 imagens...');
-  await sleep(80);
+  // Espera ATIVA pela mensagem de erro do Worker em vez de tempo fixo.
+  await aguardar(() => Promise.resolve(FakeWorker.instances[0] && FakeWorker.instances[0].terminated), 3000);
   assert.equal(FakeWorker.instances[0].terminated, true, 'Worker encerrado na mensagem de erro');
 });
 

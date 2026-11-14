@@ -75,6 +75,26 @@ const ARQUIVO_VTT = `WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nOlá do Clarifica.
 // o DOM (elementos e tracks), não a mídia.
 const VIDEO_MP4 = Buffer.from([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x6d, 0x70, 0x34, 0x32]);
 
+// Barreiras DELIBERADAS — exercita o painel de auditoria WCAG em tempo
+// real (v2.0.0) na página real: imagem sem alt, botão vazio, link
+// genérico, campo sem rótulo e iframe sem title (html com lang correto e
+// títulos em ordem — as barreiras são contadas, não inventadas).
+const PAGINA_BARRERAS = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><title>Portal de Exemplo — Barreiras</title></head>
+<body>
+  <main>
+    <h1>Página com barreiras para auditoria</h1>
+    <p>Conteúdo do portal para contexto da auditoria automática.</p>
+    <img src="/imagens/praca.svg" id="sem-alt">
+    <button id="btn-vazio">   </button>
+    <a href="/destino" id="link-generico">Clique aqui</a>
+    <input type="text" id="campo-sem-label">
+    <iframe src="/pagina-curta" id="frame-sem-title"></iframe>
+  </main>
+</body>
+</html>`;
+
 function iniciarServidor() {
   const servidor = http.createServer((req, res) => {
     const rota = (req.url || '/').split('?')[0];
@@ -95,6 +115,7 @@ function iniciarServidor() {
       rota === '/imagens/praca.svg' ? IMAGEM_PRAIA :
       rota === '/imagens/cidade.svg' ? IMAGEM_CIDADE :
       rota === '/video' ? PAGINA_VIDEO :
+      rota === '/barreiras' ? PAGINA_BARRERAS :
       PAGINA_ARTIGO;
     const tipo = rota.endsWith('.svg') ? 'image/svg+xml' : 'text/html; charset=utf-8';
     res.setHeader('Content-Type', tipo);

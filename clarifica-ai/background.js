@@ -134,6 +134,12 @@ chrome.commands.onCommand.addListener(async (command) => {
     try { await pararLegendas('parada-pedida'); } catch (e) { /* degradação */ }
   }
 
+  // Sincronização (v2.0.0): o reset pede pelo ATALHO também limpa as
+  // abas http(s) já abertas (a aba ativa é limpa pela executarAcao abaixo).
+  if (action === 'reset-all') {
+    try { await sincronizarAcoes('limpar'); } catch (e) { /* degradação */ }
+  }
+
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab) return;
 
@@ -193,6 +199,17 @@ function executarAcao(acao) {
         window.speechSynthesis.cancel();
       }
     } catch (e) { /* API ausente (navegador/ambiente sem TTS) */ }
+    // Painel de auditoria WCAG (v2.0.0): fecha o dialog em tempo real —
+    // desconecta o MutationObserver, remove o listener de Esc e limpa o
+    // host; a remoção por ID abaixo cobre mesmo sem host registrado.
+    const painelAuditoria = window.__clarificaPainelAuditoria;
+    if (painelAuditoria && typeof painelAuditoria.fechar === 'function') {
+      try { painelAuditoria.fechar(); } catch (e) { /* nó fora do DOM */ }
+    } else {
+      const painelRestante = document.getElementById('clarifica-painel-auditoria');
+      if (painelRestante) painelRestante.remove();
+    }
+    window.__clarificaPainelAuditoria = null;
     document.querySelectorAll('[aria-hidden="true"]').forEach(el => {
       el.removeAttribute('aria-hidden');
       el.removeAttribute('inert');
@@ -248,6 +265,322 @@ function executarAcao(acao) {
   else if (acao === 'summarize' || acao === 'describe-images' || acao === 'translate-selection') {
     window.postMessage({ type: 'TRIGGER_ACTION', action: acao }, '*');
   }
+}
+
+// =====================================================================
+// Sincronização de perfis e filtros (v2.0.0)
+//
+// O estado corrente (filtro de daltonismo com intensidade, perfil
+// neurodivergente ativo e a própria opção de sincronização) vive no
+// chrome.storage — a MESMA fonte de verdade do popup. Duas portas de
+// aplicação:
+//   1. NAVEGAÇÃO — chrome.tabs.onUpdated (status complete) injeta o
+//      estado na página recém-carregada (aplicação silenciosa por
+//      design: o efeito é o feedback; sem anúncio repetitivo em cada
+//      página, que seria ruído para leitores de tela);
+//   2. TROCA NO POPUP — a mensagem 'clarifica-sincronizar' (aplicar |
+//      limpar) propaga o estado para as abas http(s) JÁ abertas (teto de
+//      20 abas; a aba ativa é poupada — o popup já aplicou nela).
+// A limpeza usa o MESMO executarAcao('reset-all') do Ctrl+Shift+X.
+// =====================================================================
+
+// Fonte única do estado sincronizável.
+function estadoSincronizavel() {
+  return { ultimoFiltro: null, intensidade: 100, perfilAtivo: null, sincronizacaoAtiva: true };
+}
+
+async function aplicarEstadoAba(tabId) {
+  let cfg = estadoSincronizavel();
+  try { cfg = await chrome.storage.local.get(cfg); } catch (e) { return { ignorado: true }; }
+  if (!cfg.sincronizacaoAtiva || (!cfg.ultimoFiltro && !cfg.perfilAtivo)) {
+    return { ignorado: true };
+  }
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: aplicarEstadoNaPagina,
+      args: [{ filtro: cfg.ultimoFiltro || null, intensidade: cfg.intensidade, perfil: cfg.perfilAtivo || null }]
+    });
+    return { success: true };
+  } catch (e) {
+    return { error: 'falha-sincronizacao' };
+  }
+}
+
+async function sincronizarAcoes(action) {
+  if (action !== 'aplicar' && action !== 'limpar') return { error: 'falha-sincronizacao' };
+  let cfg = estadoSincronizavel();
+  try { cfg = await chrome.storage.local.get(cfg); } catch (e) { /* padrões */ }
+  if (!cfg.sincronizacaoAtiva) return { success: true, ignorado: true };
+  let abaAtiva = null;
+  try { [abaAtiva] = await chrome.tabs.query({ active: true, currentWindow: true }); } catch (e) { /* sem aba */ }
+  let abas = [];
+  try { abas = await chrome.tabs.query({ url: ['http://*/*', 'https://*/*'] }); } catch (e) { /* sem abas */ }
+  let aplicadas = 0;
+  for (const aba of abas.slice(0, 20)) {
+    if (abaAtiva && aba.id === abaAtiva.id) continue;
+    try {
+      if (action === 'aplicar') {
+        const r = await aplicarEstadoAba(aba.id);
+        if (r && r.success) aplicadas++;
+      } else {
+        await chrome.scripting.executeScript({
+          target: { tabId: aba.id },
+          func: executarAcao,
+          args: ['reset-all']
+        });
+        aplicadas++;
+      }
+    } catch (e) { /* aba indisponível (descartada, chrome://, etc.) */ }
+  }
+  return { success: true, abas: aplicadas };
+}
+
+// Navegação completa em página http(s): aplica o estado salvo na página
+// nova. Sem anúncio e sem falha visível — a sincronização é de fundo.
+try {
+  chrome.tabs.onUpdated.addListener((tabId, mudancas, aba) => {
+    if (mudancas && mudancas.status === 'complete' && aba && /^https?:/i.test(String(aba.url || ''))) {
+      aplicarEstadoAba(tabId).catch(() => null);
+    }
+  });
+} catch (e) { /* ambiente sem chrome.tabs.onUpdated (testes em Node) */ }
+
+// Roteador da sincronização (mesmo padrão das legendas: resposta
+// assíncrona com guarda de API).
+try {
+  chrome.runtime.onMessage.addListener((mensagem, remetente, responder) => {
+    if (!mensagem || typeof mensagem !== 'object') return;
+    if (mensagem.target === 'background' && mensagem.type === 'clarifica-sincronizar') {
+      sincronizarAcoes(mensagem.action)
+        .then(responder)
+        .catch(() => responder({ error: 'falha-sincronizacao' }));
+      return true; // resposta assíncrona
+    }
+  });
+} catch (e) { /* ambiente sem runtime.onMessage (testes em Node) */ }
+
+// ---- Funções INJETADAS da sincronização (o Chrome serializa apenas o
+// corpo — toda dependência vive dentro; as cópias canônicas abaixo são
+// mantidas idênticas às do popup.js por teste de paridade). ----
+
+// Reaplica filtro e/ou perfil na página recém-carregada ou sincronizada.
+// Idempotente: limpa o estado anterior antes de aplicar o novo.
+function aplicarEstadoNaPagina(estado) {
+  // === INÍCIO DA CÓPIA CANÔNICA DE FILTROS (popup.js — LÓGICA PURA DE
+  // FILTROS; paridade garantida por tests/sincronizacao.test.js) ===
+  const MATRIZES_DALTONISMO = {
+    protanopia: [0.567, 0.433, 0, 0, 0,
+                 0.558, 0.442, 0, 0, 0,
+                 0, 0.242, 0.758, 0, 0,
+                 0, 0, 0, 1, 0],
+    deuteranopia: [0.625, 0.375, 0, 0, 0,
+                   0.7, 0.3, 0, 0, 0,
+                   0, 0.3, 0.7, 0, 0,
+                   0, 0, 0, 1, 0],
+    tritanopia: [0.95, 0.05, 0, 0, 0,
+                 0, 0.433, 0.567, 0, 0,
+                 0, 0.475, 0.525, 0, 0,
+                 0, 0, 0, 1, 0]
+  };
+  function matrizComIntensidade(matriz, intensidade) {
+    const t = Math.min(100, Math.max(0, Number(intensidade) || 0)) / 100;
+    return matriz.map((valor, i) => {
+      const diagonal = i % 5 === Math.floor(i / 5) ? 1 : 0;
+      return t * valor + (1 - t) * diagonal;
+    });
+  }
+  function formatarValoresMatriz(matriz) {
+    const valores = matriz.map((v) => Number(v.toFixed(3)).toString());
+    return [0, 1, 2, 3]
+      .map((linha) => valores.slice(linha * 5, linha * 5 + 5).join(', '))
+      .join(' ');
+  }
+  function filtroDaltonismoCss(tipo, intensidade) {
+    const matriz = MATRIZES_DALTONISMO[tipo];
+    if (!matriz) return '';
+    const valores = formatarValoresMatriz(matrizComIntensidade(matriz, intensidade));
+    const svg = `<svg xmlns='http://www.w3.org/2000/svg'><filter id='f'><feColorMatrix type='matrix' values='${valores}'/></filter></svg>#f`;
+    return `url("data:image/svg+xml;utf8,${svg}")`;
+  }
+  // === FIM DA CÓPIA CANÔNICA DE FILTROS ===
+
+  // === INÍCIO DA CÓPIA CANÔNICA DE PERFIS (popup.js — LÓGICA PURA DE
+  // PERFIS NEURODIVERGENTES; paridade garantida por
+  // tests/sincronizacao.test.js) ===
+  const NOMES_PERFIS = {
+    tea: 'nomePerfilTea',
+    tdah: 'nomePerfilTdah',
+    dislexia: 'nomePerfilDislexia'
+  };
+  const TIPOS_PERFIL = Object.keys(NOMES_PERFIS);
+  const ALVO_TEXTO = 'p, li, h1, h2, h3, h4, h5, h6, blockquote, dd, dt, figcaption, td, th, span, a, label, button, summary';
+  const ALVO_MONO = 'code, pre, kbd, samp, textarea, input';
+  function cssPerfil(nome) {
+    if (nome === 'tea') {
+      return [
+        '*, *::before, *::after { animation-play-state: paused !important; transition: none !important; scroll-behavior: auto !important; }',
+        '*:not(html):not(head):not(style):not(script):not(link):not(meta) { box-shadow: none !important; text-shadow: none !important; backdrop-filter: none !important; filter: none !important; }'
+      ].join('\n');
+    }
+    if (nome === 'tdah') {
+      return [
+        '#clarifica-spotlight { position: fixed; inset: 0; pointer-events: none; z-index: 2147483646; background: radial-gradient(circle 170px at var(--clarifica-x, 50%) var(--clarifica-y, 40%), rgba(0, 0, 0, 0) 0px, rgba(0, 0, 0, 0) 150px, rgba(2, 6, 23, 0.82) 240px); }',
+        '.clarifica-destaque-leitura { outline: 3px solid #2563eb; outline-offset: 3px; background: rgba(250, 204, 21, 0.35) !important; border-radius: 2px; }'
+      ].join('\n');
+    }
+    if (nome === 'dislexia') {
+      return [
+        `${ALVO_TEXTO} { letter-spacing: 0.05em !important; word-spacing: 0.12em !important; }`,
+        `${ALVO_TEXTO} { line-height: 1.8 !important; }`,
+        `${ALVO_TEXTO} { font-family: Verdana, Tahoma, 'Segoe UI', Arial, sans-serif !important; }`,
+        `${ALVO_MONO} { letter-spacing: normal !important; word-spacing: normal !important; line-height: normal !important; font-family: ui-monospace, 'Cascadia Mono', 'Courier New', monospace !important; }`,
+        '#clarifica-regua { position: fixed; left: 0; right: 0; top: -100px; height: 48px; box-sizing: border-box; border-top: 2px solid rgba(37, 99, 235, 0.85); border-bottom: 2px solid rgba(37, 99, 235, 0.85); background: rgba(37, 99, 235, 0.08); pointer-events: none; z-index: 2147483646; }'
+      ].join('\n');
+    }
+    return '';
+  }
+  // === FIM DA CÓPIA CANÔNICA DE PERFIS ===
+
+  const limpezas = [];
+  const registrarLimpeza = (fn) => { limpezas.push(fn); };
+
+  // Idempotência: desmonta o estado anterior (mesmo espelho do reset-all —
+  // estilos, elementos e listeners dos perfis).
+  for (const id of ['clarifica-perfil-tea', 'clarifica-perfil-tdah', 'clarifica-perfil-dislexia', 'clarifica-spotlight', 'clarifica-regua']) {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+  }
+  document.querySelectorAll('.clarifica-destaque-leitura').forEach((el) => el.classList.remove('clarifica-destaque-leitura'));
+  const gifsAnteriores = window.__clarificaGifsPerfilTea;
+  if (Array.isArray(gifsAnteriores)) {
+    for (const par of gifsAnteriores) {
+      try { par.canvas.replaceWith(par.original); } catch (e) { /* nó fora do DOM */ }
+    }
+    window.__clarificaGifsPerfilTea = [];
+  }
+  const limpezaAnterior = window.__clarificaLimpezaPerfis;
+  if (typeof limpezaAnterior === 'function') {
+    try { limpezaAnterior(); } catch (e) { /* listeners já removidos */ }
+  }
+  window.__clarificaLimpezaPerfis = null;
+  window.__clarificaIndiceBloco = -1;
+
+  const dados = estado && typeof estado === 'object' ? estado : {};
+
+  // Filtro de daltonismo (com intensidade) — construído AQUI pela cópia
+  // canônica (mesma matriz que o popup injeta).
+  if (dados.filtro && MATRIZES_DALTONISMO[dados.filtro]) {
+    document.documentElement.style.filter = filtroDaltonismoCss(dados.filtro, dados.intensidade);
+  } else {
+    document.documentElement.style.filter = '';
+  }
+
+  // Perfil neurodivergente — CSS completo + os elementos e listeners que
+  // fazem parte do perfil (mesmo comportamento do popup).
+  if (dados.perfil && TIPOS_PERFIL.includes(dados.perfil)) {
+    const estilo = document.createElement('style');
+    estilo.id = 'clarifica-perfil-' + dados.perfil;
+    estilo.textContent = cssPerfil(dados.perfil);
+    document.documentElement.appendChild(estilo);
+
+    if (dados.perfil === 'tea') {
+      if (typeof document.getAnimations === 'function') {
+        try {
+          document.getAnimations().forEach((anim) => {
+            try { anim.pause(); } catch (e) { /* animação já terminada */ }
+          });
+        } catch (e) { /* API indisponível */ }
+      }
+      window.__clarificaGifsPerfilTea = [];
+      for (const img of Array.from(document.querySelectorAll('img'))) {
+        const src = img.getAttribute('src') || '';
+        if (!/\.gif(\?|#|$)/i.test(src)) continue;
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth || img.width || 300;
+          canvas.height = img.naturalHeight || img.height || 300;
+          const contexto = canvas.getContext && canvas.getContext('2d');
+          if (!contexto) break;
+          contexto.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const alt = img.getAttribute('alt');
+          if (alt) {
+            canvas.setAttribute('role', 'img');
+            canvas.setAttribute('aria-label', alt);
+          }
+          window.__clarificaGifsPerfilTea.push({ canvas, original: img });
+          img.replaceWith(canvas);
+        } catch (e) { /* imagem indisponível: segue com as demais */ }
+      }
+    }
+
+    if (dados.perfil === 'tdah') {
+      const spot = document.createElement('div');
+      spot.id = 'clarifica-spotlight';
+      document.body.appendChild(spot);
+      const aplicarPosicao = (x, y) => {
+        spot.style.setProperty('--clarifica-x', x + 'px');
+        spot.style.setProperty('--clarifica-y', y + 'px');
+      };
+      let quadroPendente = null;
+      const moverSpot = (evento) => {
+        const x = evento.clientX || 0;
+        const y = evento.clientY || 0;
+        if (typeof requestAnimationFrame !== 'function') { aplicarPosicao(x, y); return; }
+        if (quadroPendente !== null) return;
+        quadroPendente = requestAnimationFrame(() => {
+          quadroPendente = null;
+          aplicarPosicao(x, y);
+        });
+      };
+      window.addEventListener('mousemove', moverSpot, true);
+      registrarLimpeza(() => window.removeEventListener('mousemove', moverSpot, true));
+
+      const blocosDeLeitura = () => Array.from(
+        document.querySelectorAll('p, li, h1, h2, h3, h4, h5, h6, blockquote, pre')
+      ).filter((el) => (el.textContent || '').trim().length > 0).slice(0, 400);
+      window.__clarificaIndiceBloco = -1;
+      const destacarBloco = (indice) => {
+        const lista = blocosDeLeitura();
+        if (lista.length === 0) return;
+        window.__clarificaIndiceBloco = Math.max(0, Math.min(lista.length - 1, indice));
+        document.querySelectorAll('.clarifica-destaque-leitura').forEach((el) => el.classList.remove('clarifica-destaque-leitura'));
+        const alvo = lista[window.__clarificaIndiceBloco];
+        alvo.classList.add('clarifica-destaque-leitura');
+        if (typeof alvo.scrollIntoView === 'function') {
+          try { alvo.scrollIntoView({ block: 'center' }); } catch (e) { /* sem rolagem */ }
+        }
+      };
+      const teclado = (evento) => {
+        if (!evento.altKey) return;
+        if (evento.key === 'ArrowDown') destacarBloco((window.__clarificaIndiceBloco ?? -1) + 1);
+        else if (evento.key === 'ArrowUp') destacarBloco(Math.max(0, (window.__clarificaIndiceBloco ?? 0) - 1));
+      };
+      document.addEventListener('keydown', teclado, true);
+      registrarLimpeza(() => document.removeEventListener('keydown', teclado, true));
+    }
+
+    if (dados.perfil === 'dislexia') {
+      const regua = document.createElement('div');
+      regua.id = 'clarifica-regua';
+      document.body.appendChild(regua);
+      const moverRegua = (evento) => {
+        regua.style.top = Math.max(0, (evento.clientY || 0) - 24) + 'px';
+      };
+      window.addEventListener('mousemove', moverRegua, true);
+      registrarLimpeza(() => window.removeEventListener('mousemove', moverRegua, true));
+    }
+
+    window.__clarificaLimpezaPerfis = () => {
+      for (const fn of limpezas) {
+        try { fn(); } catch (e) { /* listener já removido */ }
+      }
+    };
+  } else {
+    window.__clarificaLimpezaPerfis = null;
+  }
+
+  return { success: true, filtro: !!dados.filtro, perfil: dados.perfil || null };
 }
 
 // =====================================================================

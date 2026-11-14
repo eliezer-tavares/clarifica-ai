@@ -9,7 +9,7 @@ const manifest = JSON.parse(readExt('manifest.json'));
 test('manifest: JSON válido com essenciais do Manifest V3', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'Clarifica.ai');
-  assert.equal(manifest.version, '1.4.0', 'versão da release corrente (atualizar o teste ao subir versão)');
+  assert.equal(manifest.version, '2.0.0', 'versão da release corrente (atualizar o teste ao subir versão)');
   assert.ok(manifest.description.length > 20, 'descrição significativa');
   assert.match(manifest.description, /offline/i);
 });
@@ -77,4 +77,16 @@ test('manifest: autoria (e-mail de contato) e versão mínima do Chrome', () => 
   // v1.4.0: 102 → 116 — o getMediaStreamId no service worker exige
   // Chrome 116+ (o documento offscreen existe desde o 109).
   assert.ok(parseInt(manifest.minimum_chrome_version, 10) >= 116, 'Chrome 116+ (tabCapture.getMediaStreamId no SW)');
+});
+
+// ---- manifest.firefox.json (v2.0.0 — suporte a Firefox/WebExtensions) ----
+// O Firefox 115+ não suporta service_worker nem tabCapture/offscreen: o
+// manifesto espelho usa MV2 com event page e SEM as permissões de captura.
+// A estrutura completa é validada por tests/firefox.test.js; aqui só a
+// sincronização de versão com o manifest do Chrome.
+const manifestFirefox = JSON.parse(readExt('manifest.firefox.json'));
+
+test('manifest: o manifesto espelho do Firefox acompanha a MESMA versão da release', () => {
+  assert.equal(manifestFirefox.version, manifest.version, 'versão sincronizada entre Chrome e Firefox');
+  assert.equal(manifestFirefox.name, manifest.name);
 });

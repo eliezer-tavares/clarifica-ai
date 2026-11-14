@@ -5,7 +5,7 @@
 
 const path = require('node:path');
 const fs = require('node:fs');
-const { JSDOM } = require('jsdom');
+const { JSDOM, VirtualConsole } = require('jsdom');
 
 // Raiz do projeto da extensão (pasta acima de tests/)
 const ROOT = path.resolve(__dirname, '..', '..');
@@ -41,7 +41,14 @@ function substituirI18n(html) {
 
 /** Cria um JSDOM com temporizadores acelerados e polyfill de innerText. */
 function makeDom(html = '<!DOCTYPE html><html lang="pt-BR"><body></body></html>', url = 'https://pagina-de-teste.exemplo/') {
-  const dom = new JSDOM(html, { runScripts: 'outside-only', url, pretendToBeVisual: true });
+  // Console virtual: encaminha console.* normalmente, mas silencia os
+  // "Error: Not implemented" do jsdom (ex.: HTMLCanvasElement.getContext,
+  // limitação conhecida do jsdom) — ruído que não afeta nenhuma asserção
+  // e polui o terminal (incl. leitores de tela).
+  const consoleVirtual = new VirtualConsole();
+  consoleVirtual.on('jsdomError', () => {});
+  consoleVirtual.sendTo(console, { omitJSDOMErrors: true });
+  const dom = new JSDOM(html, { runScripts: 'outside-only', url, pretendToBeVisual: true, virtualConsole: consoleVirtual });
   const { window } = dom;
 
   // Encurta temporizadores para manter a suíte rápida
@@ -63,7 +70,7 @@ function makeDom(html = '<!DOCTYPE html><html lang="pt-BR"><body></body></html>'
  * opts.storageInicial pré-popula o chrome.storage.local (testes de persistência).
  * opts.respondRuntime injeta respostas do service worker para runtime.sendMessage (testes de legendas v1.4.0). */
 function makeChromeStub(window, opts = {}) {
-  const calls = { executeScript: [], commands: [], getURL: [], onChanged: [], sendMessage: [], onMessage: [] };
+  const calls = { executeScript: [], commands: [], getURL: [], onChanged: [], sendMessage: [], onMessage: [], onUpdated: [], onRemoved: [] };
   const fakeTab = { id: opts.tabId ?? 7, active: true, currentWindow: true };
   const storageStore = { ...(opts.storageInicial || {}) };
 
@@ -96,7 +103,8 @@ function makeChromeStub(window, opts = {}) {
         calls.sendMessage.push(msg);
         if (typeof opts.respondRuntime === 'function') return opts.respondRuntime(msg);
         // Resposta padrão: service worker consentindo (como o fluxo real
-        // faz quando a captura é aceita).
+        // faz quando a captura é aceita) e sincronização bem-sucedida
+        // (v2.0.0 — o teste sobrescreve com respondRuntime quando precisa).
         if (msg && msg.type === 'clarifica-legendas') {
           if (msg.action === 'iniciar') return opts.respostaLegendasIniciar || { success: true };
           if (msg.action === 'parar') return { success: true };
@@ -106,7 +114,17 @@ function makeChromeStub(window, opts = {}) {
       // v1.4.0: broadcasts do offscreen/SW chegam ao popup por este canal.
       onMessage: { addListener: (cb) => { calls.onMessage.push(cb); } }
     },
-    tabs: { query: async () => [fakeTab] },
+    // v2.0.0 (sincronização): query respeita o filtro por URL — o service
+    // worker consulta as abas http(s) com { url: [...] } (opts.abasConsulta
+    // injeta a lista de abas do cenário de teste).
+    tabs: {
+      query: async (consulta) => {
+        if (consulta && Array.isArray(consulta.url)) return opts.abasConsulta || [fakeTab];
+        return [fakeTab];
+      },
+      onUpdated: { addListener: (cb) => { calls.onUpdated.push(cb); } },
+      onRemoved: { addListener: (cb) => { calls.onRemoved.push(cb); } }
+    },
     scripting: {
       executeScript: async (details) => {
         calls.executeScript.push(details);
@@ -151,6 +169,17 @@ function makeChromeStub(window, opts = {}) {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Aguarda até que a condição seja verdadeira (evita corridas com temporizadores).
+ * Padrão da casa (popup/multimodal/perfis/legendas): testes que dependem de
+ * resposta assíncrona do Worker NÃO afirmam após tempo fixo — em máquinas
+ * carregadas os temporizadores do sistema atrasam e o sleep fixo verificava
+ * antes da resposta chegar (corrida intermitente). Espera ATIVA pela condição
+ * com teto generoso. */
+const aguardar = async (condicao, maxMs = 3000, passo = 5) => {
+  const inicio = Date.now();
+  while (!(await condicao()) && Date.now() - inicio < maxMs) await sleep(passo);
+};
 
 // ---- Cálculo de contraste (WCAG 2.1, fórmula oficial) ----
 function srgbToLinear(c) {
@@ -213,6 +242,10 @@ class FakeWorker {
       setTimeout(() => this.onmessage && this.onmessage({ data: { type: 'error', error: 'erro-traducao' } }), 5);
       return;
     }
+    if (FakeWorker.mode === 'worker-qa-erro') {
+      setTimeout(() => this.onmessage && this.onmessage({ data: { type: 'error', error: 'erro-qa' } }), 5);
+      return;
+    }
     if (msg.type === 'summarize') {
       setTimeout(() => this.onmessage && this.onmessage({ data: { status: 'success', summary: 'RESUMO-TESTE' } }), 5);
     } else if (msg.type === 'describe-image') {
@@ -222,6 +255,11 @@ class FakeWorker {
       // do resultado final — trava regressões que resolvessem na 1ª mensagem.
       setTimeout(() => this.onmessage && this.onmessage({ data: { type: 'status', message: 'Transcrevendo áudio...' } }), 5);
       setTimeout(() => this.onmessage && this.onmessage({ data: { type: 'transcription', transcript: 'TRANSCRICAO-TESTE' } }), 15);
+    } else if (msg.type === 'question-answering') {
+      // Mesma sequência REAL do worker (v2.0.0): status antes da resposta —
+      // a resposta é EXTRATIVA (trecho do contexto enviado).
+      setTimeout(() => this.onmessage && this.onmessage({ data: { type: 'status', message: 'Procurando a resposta na página...' } }), 5);
+      setTimeout(() => this.onmessage && this.onmessage({ data: { type: 'qa-answer', answer: 'RESPOSTA-TESTE', score: 0.95 } }), 15);
     } else if (msg.type === 'ocr-image') {
       setTimeout(() => this.onmessage && this.onmessage({ data: { type: 'ocr-text', text: 'OCR-' + msg.data, imageUrl: msg.data } }), 5);
     } else if (msg.type === 'translate-text') {
@@ -237,4 +275,4 @@ class FakeWorker {
 FakeWorker.instances = [];
 FakeWorker.mode = 'ok';
 
-module.exports = { makeDom, makeChromeStub, sleep, contrast, luminance, FakeWorker, readExt, ext, ROOT, mensagemPT, substituirI18n, MENSAGENS_PT };
+module.exports = { makeDom, makeChromeStub, sleep, aguardar, contrast, luminance, FakeWorker, readExt, ext, ROOT, mensagemPT, substituirI18n, MENSAGENS_PT };

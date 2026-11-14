@@ -36,6 +36,23 @@
 //   opcoes.idioma → hint opcional de idioma de origem (código Whisper,
 //     ex.: 'pt'). Sem opcoes (transcrição pontual da v1.3.0), o
 //     comportamento permanece exatamente o mesmo — detecção automática.
+//
+// v2.0.0 — Versão final (registry_versao 4, um modelo novo):
+//   question-answering → perguntas e respostas sobre a página
+//     (distilbert-base-cased-distilled-squad, ~70 MB) [v2.0.0].
+//     A mensagem carrega data = { pergunta, contexto } — extrair a
+//     resposta do PRÓPRIO texto da página (sem alucinação: o modelo só
+//     recorta trecho existente).
+//   E as tarefas summarize e describe-image aceitam `opcoes` —
+//     opcoes.idioma = 'pt' → o resultado em inglês dos modelos é
+//     TRADUZIDO no mesmo worker pelo opus-mt-en-ROMANCE (já fixado no
+//     registry desde a v1.3.0 — cadeia modelo→modelo, ZERO modelos
+//     novos para a saída em português);
+//     opcoes.claro = true  → Português Claro assistido por MODELO:
+//     parâmetros de geração com teto menor de tokens (frases curtas e
+//     ordem direta), via parametrosDeGeracao de scripts/clarifica-puro.js
+//     (mesma fonte canônica, extraída por marcadores nos testes).
+//     Sem opcoes, o comportamento permanece idêntico ao da v1.0.0.
 
 import { pipeline, env } from '__CLARIFICA_BIBLIOTECA__';
 
@@ -56,6 +73,7 @@ let imageCaptioner = null;
 let transcritor = null;
 let leitorDeTexto = null;
 let tradutor = null;
+let respondedor = null;
 
 // O modelo en-ROMANCE traduz para qualquer língua românica; o produto
 // Clarifica.ai atende público pt-BR, então o código de destino é fixado
@@ -77,8 +95,28 @@ self.onmessage = async (event) => {
         });
       }
       self.postMessage({ status: "processing", message: "Analisando texto..." });
-      const output = await summarizer(data, { max_new_tokens: 150, min_new_tokens: 50, do_sample: false });
-      self.postMessage({ status: "success", summary: output[0].summary_text });
+      // v2.0.0: opcoes.claro ativa o modo Português Claro assistido por
+      // modelo (teto menor de tokens — frases curtas e ordem direta).
+      // Sem opcoes, os parâmetros são exatamente os da v1.0.0.
+      const params = parametrosDeGeracao(opcoes.claro === true);
+      const output = await summarizer(data, params);
+      let resumo = output[0].summary_text;
+      // v2.0.0: cadeia modelo→modelo para a saída em português — o resumo
+      // em inglês é traduzido pelo opus-mt-en-ROMANCE JÁ fixado no registry
+      // (v1.3.0): nenhum modelo novo. Sem opcoes.idioma, nada acontece.
+      if (opcoes.idioma === 'pt') {
+        self.postMessage({ status: "processing", message: "Traduzindo para português..." });
+        if (!tradutor) {
+          self.postMessage({ status: "loading", message: "Carregando modelo de tradução (~115MB, 1ª vez só)..." });
+          tradutor = await pipeline('translation', 'Xenova/opus-mt-en-ROMANCE', {
+            quantized: true,
+            revision: '9d2ba69ac80c8e8453c3d9a1e2323a0e7b8ca3cd'
+          });
+        }
+        const traduzido = await tradutor(CODIGO_ALVO_PT + resumo);
+        resumo = traduzido[0].translation_text;
+      }
+      self.postMessage({ status: "success", summary: resumo });
     } catch (error) {
       // Códigos de erro (não texto) para que o popup traduza no idioma da
       // interface — o Worker roda em página injetada, sem chrome.i18n.
@@ -96,7 +134,23 @@ self.onmessage = async (event) => {
         });
       }
       const output = await imageCaptioner(data);
-      self.postMessage({ type: 'image-description', description: output[0].generated_text, imageUrl: data });
+      let descricao = output[0].generated_text;
+      // v2.0.0: mesmo contrato do resumo — descrição em inglês traduzida
+      // no próprio worker pela cadeia modelo→modelo (opus-mt, zero modelos
+      // novos). Sem opcoes.idioma, comportamento idêntico ao da v1.0.0.
+      if (opcoes.idioma === 'pt') {
+        self.postMessage({ type: 'status', message: "Traduzindo para português..." });
+        if (!tradutor) {
+          self.postMessage({ type: 'status', message: "Carregando modelo de tradução (~115MB, 1ª vez só)..." });
+          tradutor = await pipeline('translation', 'Xenova/opus-mt-en-ROMANCE', {
+            quantized: true,
+            revision: '9d2ba69ac80c8e8453c3d9a1e2323a0e7b8ca3cd'
+          });
+        }
+        const traduzido = await tradutor(CODIGO_ALVO_PT + descricao);
+        descricao = traduzido[0].translation_text;
+      }
+      self.postMessage({ type: 'image-description', description: descricao, imageUrl: data });
     } catch (error) {
       self.postMessage({ type: 'error', error: "erro-imagem" });
     }
@@ -169,4 +223,41 @@ self.onmessage = async (event) => {
       self.postMessage({ type: 'error', error: "erro-traducao" });
     }
   }
+
+  if (type === 'question-answering') {
+    // v2.0.0 — Assistente de perguntas e respostas sobre a página: modelo
+    // de QA EXTRATIVO (distilbert-base-cased-distilled-squad, ~70 MB). O
+    // modelo só recorta um trecho do CONTEXTO enviado pela página — sem
+    // geração livre, sem alucinação: a resposta existe no texto da página.
+    // `data` chega como { pergunta, contexto } (contexto limitado a 4000
+    // caracteres pela página — corpo de main/article/body).
+    try {
+      if (!respondedor) {
+        self.postMessage({ type: 'status', message: "Carregando modelo de perguntas e respostas (~70MB, 1ª vez só)..." });
+        respondedor = await pipeline('question-answering', 'Xenova/distilbert-base-cased-distilled-squad', {
+          quantized: true,
+          revision: 'bdbb0a5e9c617c3c7ea9f3cbaf2be3ad871bcd7d'
+        });
+      }
+      self.postMessage({ type: 'status', message: "Procurando a resposta na página..." });
+      const pergunta = String((data && data.pergunta) || '').trim();
+      const contexto = String((data && data.contexto) || '');
+      if (!pergunta || !contexto.trim()) throw new Error('qa-entrada-invalida');
+      const output = await respondedor(pergunta, contexto);
+      self.postMessage({ type: 'qa-answer', answer: output.answer, score: output.score });
+    } catch (error) {
+      self.postMessage({ type: 'error', error: "erro-qa" });
+    }
+  }
 };
+
+// parametrosDeGeracao vive na FONTE CANÔNICA scripts/clarifica-puro.js
+// (v2.0.0). O worker roda como módulo ES no navegador, mas o bundle
+// vendado é avaliado sem bundler — a cópia inline abaixo garante o
+// funcionamento e a paridade com a fonte canônica é garantida por teste
+// (tests/qa.test.js compara a fonte normalizada).
+function parametrosDeGeracao(claro) {
+  return claro === true
+    ? { max_new_tokens: 90, min_new_tokens: 30, do_sample: false }
+    : { max_new_tokens: 150, min_new_tokens: 50, do_sample: false };
+}

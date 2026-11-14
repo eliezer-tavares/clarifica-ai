@@ -85,6 +85,7 @@ async function workerReal() {
     assert.match(codigo, /Xenova\/whisper-tiny/, 'worker real: modelo de transcrição do projeto (v1.3.0)');
     assert.match(codigo, /Xenova\/trocr-small-printed/, 'worker real: modelo de OCR do projeto (v1.3.0)');
     assert.match(codigo, /Xenova\/opus-mt-en-ROMANCE/, 'worker real: modelo de tradução do projeto (v1.3.0)');
+    assert.match(codigo, /Xenova\/distilbert-base-cased-distilled-squad/, 'worker real: modelo de QA do projeto (v2.0.0)');
     assert.match(codigo, />>pt<</, 'worker real: código de destino português fixado no prefixo Marian');
 
     // Dentro da árvore do projeto para que o import resolva o node_modules local.

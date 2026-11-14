@@ -52,6 +52,14 @@ const tradutor = await pipeline('translation', 'Xenova/opus-mt-en-ROMANCE', {
 });
 console.log(`✔ Tradutor pronto em ${((Date.now() - t) / 1000).toFixed(0)}s`);
 
+console.log('Baixando Xenova/distilbert-base-cased-distilled-squad (QA extrativo, quantizado, revisão bdbb0a5e)...');
+t = Date.now();
+const respondedor = await pipeline('question-answering', 'Xenova/distilbert-base-cased-distilled-squad', {
+  quantized: true,
+  revision: 'bdbb0a5e9c617c3c7ea9f3cbaf2be3ad871bcd7d'
+});
+console.log(`✔ Respondedor de perguntas pronto em ${((Date.now() - t) / 1000).toFixed(0)}s`);
+
 // Fixture real de imagem para o teste de descrição (mesma dos exemplos da transformers.js)
 const FIXTURE = new URL('../fixtures/football-match.jpg', import.meta.url);
 if (!fs.existsSync(FIXTURE)) {
@@ -92,5 +100,10 @@ t = Date.now();
 const amostra = 'Digital accessibility ensures that websites can be used by everyone, including people with disabilities. Screen readers, keyboard navigation and proper contrast are essential for inclusion.';
 const saida = await summarizer(amostra, { max_new_tokens: 60, min_new_tokens: 20, do_sample: false });
 console.log('✔ Sanidade de sumarização real:', JSON.stringify(saida[0].summary_text).slice(0, 120), `(${((Date.now() - t) / 1000).toFixed(0)}s)`);
+
+// Sanidade real do QA extrativo (v2.0.0) — resposta recortada do contexto
+t = Date.now();
+const resposta = await respondedor('What moves inference to the user device?', amostra);
+console.log('✔ Sanidade de QA real:', JSON.stringify(resposta.answer).slice(0, 120), `(score ${(resposta.score).toFixed(2)}, ${((Date.now() - t) / 1000).toFixed(1)}s)`);
 
 console.log('Modelos reais em cache. Pronto para npm test.');
