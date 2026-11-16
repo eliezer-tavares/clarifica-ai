@@ -1,58 +1,82 @@
-<write_to_file>
-<path>CITATION.cff</path>
-<content>cff-version: 1.2.0
-title: "Clarifica.ai: a privacy-first browser extension for on-device accessibility AI"
+
+cff-version: 1.2.0
+
 message: >-
-If you use this software, please cite it using the
-metadata from this file.
+  If you use this software, please cite it using the
+  metadata from this file.
+
 type: software
+
+title: "Clarifica.ai: a privacy-first browser extension for on-device accessibility AI"
+
 authors:
-- given-names: Eliezer
-family-names: Tavares de Oliveira
-email: contact@eliezertavaresdeoliveira.com
-affiliation: "Universidade Virtual do Estado de São Paulo (UNIVESP), Brazil"
-orcid: "https://orcid.org/0009-0007-2577-8635"
-doi: 10.5281/zenodo.24268882
+  - given-names: Eliezer
+    family-names: Tavares de Oliveira
+    email: contact@eliezertavaresdeoliveira.com
+    affiliation: "Universidade Virtual do Estado de São Paulo (UNIVESP), Brazil"
+    orcid: "https://orcid.org/0009-0007-2577-8635"
+
+doi: "10.5281/zenodo.24268882"
+
 identifiers:
-- type: doi
-value: 10.5281/zenodo.24268882
-description: Zenodo concept DOI (all versions)
-- type: doi
-value: 10.5281/zenodo.24268883
-description: Zenodo version DOI (v2.0.0-comunidade-coc)
+  - type: doi
+    value: "10.5281/zenodo.24268882"
+    description: "Zenodo concept DOI (all versions)"
+  - type: doi
+    value: "10.5281/zenodo.24268883"
+    description: "Zenodo version DOI (v2.0.0-comunidade-coc)"
+
+description: >-
+  Clarifica.ai is a privacy-first browser extension that provides
+  a comprehensive suite of web accessibility features powered
+  entirely by on-device artificial intelligence (Edge AI).
+
 abstract: >-
-Clarifica.ai is a browser extension that brings a full suite of
-accessibility features to the web with all artificial
-intelligence running on-device (Edge AI): extractive question
-answering over the current page, text summarization, image
-captioning, printed-text OCR, speech recognition with live
-captions (bilingual mode), and English-to-Portuguese
-translation, plus three neurodivergent profiles (autism, ADHD,
-dyslexia), color-blindness filters, an Essential Reading mode,
-a real-time WCAG audit panel and profile synchronization.
-Delivered as a WebExtensions package (Manifest V3 for
-Chromium, Manifest V2 for Firefox 115+), it vendors the
-Transformers.js runtime and pins every model to a specific
-Hugging Face commit (SHA) for reproducibility. No text, image
-or audio leaves the user's device: no backend servers, no
-telemetry, no third-party runtime dependencies. Designed and
-tested around screen reader users (NVDA, JAWS) with 199
-unit tests including real model inference and 25 end-to-end
-tests in real Chromium (23 in the standard suite plus 2
-opt-in tests with real AI).
+  Clarifica.ai is a browser extension that brings a full suite of
+  accessibility features to the web with all artificial
+  intelligence running on-device (Edge AI): extractive question
+  answering over the current page, text summarization, image
+  captioning, printed-text OCR, speech recognition with live
+  captions (bilingual mode), and English-to-Portuguese
+  translation, plus three neurodivergent profiles (autism, ADHD,
+  dyslexia), color-blindness filters, an Essential Reading mode,
+  a real-time WCAG audit panel and profile synchronization.
+
+  Delivered as a WebExtensions package (Manifest V3 for
+  Chromium, Manifest V2 for Firefox 115+), it vendors the
+  Transformers.js runtime and pins every model to a specific
+  Hugging Face commit (SHA) for reproducibility.
+
+  No text, image or audio leaves the user's device: no backend
+  servers, no telemetry, no third-party runtime dependencies.
+
+  Designed and tested around screen reader users (NVDA, JAWS)
+  with 199 unit tests including real model inference and 25
+  end-to-end tests in real Chromium (23 in the standard suite
+  plus 2 opt-in tests with real AI).
+
 keywords:
-- accessibility
-- edge AI
-- browser extension
-- WebExtensions
-- screen readers
-- WCAG
-- Transformers.js
-- on-device machine learning
+  - accessibility
+  - edge AI
+  - browser extension
+  - WebExtensions
+  - screen readers
+  - WCAG
+  - Transformers.js
+  - on-device machine learning
+  - artificial intelligence
+  - privacy
+  - assistive technology
+  - neurodiversity
+  - OCR
+  - speech recognition
+
 license: Apache-2.0
+
 repository-code: "https://github.com/eliezer-tavares/clarifica-ai"
+
 url: "https://github.com/eliezer-tavares/clarifica-ai"
+
 version: "2.0.0"
+
 date-released: "2026-11-15"
-</content>
-</write_to_file>
