@@ -1,4 +1,3 @@
-
 cff-version: 1.2.0
 
 message: >-
@@ -25,11 +24,6 @@ identifiers:
   - type: doi
     value: "10.5281/zenodo.24268883"
     description: "Zenodo version DOI (v2.0.0-comunidade-coc)"
-
-description: >-
-  Clarifica.ai is a privacy-first browser extension that provides
-  a comprehensive suite of web accessibility features powered
-  entirely by on-device artificial intelligence (Edge AI).
 
 abstract: >-
   Clarifica.ai is a browser extension that brings a full suite of

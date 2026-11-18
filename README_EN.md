@@ -1,10 +1,11 @@
-# 🧠 Clarifica.ai
+﻿# 🧠 Clarifica.ai
 
 > Universal accessibility with local Artificial Intelligence: **questions and answers about the page**, summaries in **Portuguese**, image description, **live CC captions**, audio transcription, OCR, EN→PT translation, read aloud, Essential Reading Mode, color blindness filters, synchronized neurodivergent profiles (ASD, ADHD, Dyslexia) and a **real-time WCAG audit panel** — right in the browser, 100% offline.
 
 **License:** Apache-2.0 · **Version:** 2.0.0 (final release) · **Manifest:** V3 (Chromium) + MV2 (Firefox) · **Browsers:** Chrome 116+, Edge, Brave and other Chromium browsers · Firefox 115+ (without live captions) · **AI:** Edge AI (local), no data leaves the device
 
 ![CI](https://github.com/eliezer-tavares/clarifica-ai/actions/workflows/ci.yml/badge.svg)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24268882.svg)](https://doi.org/10.5281/zenodo.24268882)
 
 **Quick links:**
 
